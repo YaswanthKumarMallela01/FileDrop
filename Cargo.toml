@@ -1,0 +1,75 @@
+[package]
+name = "filedrop"
+version = "0.1.0"
+edition = "2021"
+description = "Secure, fast, local Wi-Fi file transfer between laptop and phone"
+authors = ["FileDrop Team"]
+license = "MIT"
+
+[[bin]]
+name = "filedrop"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Networking
+axum = { version = "0.8", features = ["ws"] }
+tokio-tungstenite = "0.26"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors"] }
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+
+# TLS / Security
+rustls = "0.23"
+tokio-rustls = "0.26"
+rcgen = "0.13"
+rustls-pemfile = "2"
+webpki-roots = "0.26"
+
+# mDNS Discovery
+mdns-sd = "0.12"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# QR Code
+qrcode = "0.14"
+
+# Crypto / Hashing
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "chrono"] }
+hostname = "0.4"
+
+# Utilities
+chrono = "0.4"
+directories = "6"
+uuid = { version = "1", features = ["v4"] }
+futures = "0.3"
+futures-util = "0.3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

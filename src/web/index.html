@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#111319">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>FileDrop</title>
+<style>
+  :root {
+    --bg: #111319;
+    --surface: #191B22;
+    --surface-high: #282A30;
+    --cyan: #00D4FF;
+    --cyan-dim: rgba(0, 212, 255, 0.15);
+    --green: #00FF88;
+    --green-dim: rgba(0, 255, 136, 0.15);
+    --red: #FF3366;
+    --red-dim: rgba(255, 51, 102, 0.15);
+    --yellow: #FFB800;
+    --text: #E8EAED;
+    --muted: #8A8F98;
+    --radius: 12px;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── Header ──────────────────────────────────────────── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(20px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--cyan), #0088CC);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 2px 12px rgba(0, 212, 255, 0.3);
+  }
+
+  .logo-text {
+    font-size: 18px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--cyan), #66E0FF);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    transition: all 0.3s ease;
+  }
+
+  .status-pill.connecting {
+    background: rgba(255, 184, 0, 0.15);
+    color: var(--yellow);
+  }
+
+  .status-pill.connected {
+    background: var(--green-dim);
+    color: var(--green);
+  }
+
+  .status-pill.disconnected {
+    background: var(--red-dim);
+    color: var(--red);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Main Content ────────────────────────────────────── */
+  .content {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 600px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* ── Drop Zone ───────────────────────────────────────── */
+  .drop-zone {
+    border: 2px dashed rgba(0, 212, 255, 0.3);
+    border-radius: var(--radius);
+    padding: 40px 24px;
+    text-align: center;
+    background: var(--surface);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .drop-zone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, var(--cyan-dim), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .drop-zone:hover::before,
+  .drop-zone.dragover::before {
+    opacity: 1;
+  }
+
+  .drop-zone.dragover {
+    border-color: var(--cyan);
+    transform: scale(1.02);
+  }
+
+  .drop-zone-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .drop-zone-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+
+  .drop-zone-subtitle {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .file-input {
+    display: none;
+  }
+
+  .select-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 12px 28px;
+    background: linear-gradient(135deg, var(--cyan), #0088CC);
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 16px rgba(0, 212, 255, 0.25);
+    position: relative;
+    z-index: 1;
+  }
+
+  .select-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(0, 212, 255, 0.35);
+  }
+
+  .select-btn:active {
+    transform: translateY(0);
+  }
+
+  /* ── File Queue ──────────────────────────────────────── */
+  .queue-section {
+    display: none;
+  }
+
+  .queue-section.visible {
+    display: block;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .queue-stats {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .file-item {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px solid rgba(255,255,255,0.04);
+    transition: all 0.2s ease;
+  }
+
+  .file-item.active {
+    border-color: rgba(0, 212, 255, 0.2);
+    background: linear-gradient(135deg, var(--surface), rgba(0, 212, 255, 0.05));
+  }
+
+  .file-item.completed {
+    border-color: rgba(0, 255, 136, 0.15);
+  }
+
+  .file-item.failed {
+    border-color: rgba(255, 51, 102, 0.15);
+  }
+
+  .file-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .file-name {
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .file-name span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-size {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap;
+    margin-left: 8px;
+  }
+
+  .file-progress-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .file-progress-fill {
+    height: 100%;
+    background: var(--cyan);
+    border-radius: 2px;
+    transition: width 0.15s ease;
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.4);
+  }
+
+  .file-item.completed .file-progress-fill {
+    background: var(--green);
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
+  }
+
+  .file-item.failed .file-progress-fill {
+    background: var(--red);
+    box-shadow: 0 0 8px rgba(255, 51, 102, 0.4);
+  }
+
+  .file-status {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+  }
+
+  .file-status.hashing { color: var(--yellow); }
+  .file-status.sending { color: var(--cyan); }
+  .file-status.done { color: var(--green); }
+  .file-status.error { color: var(--red); }
+
+  /* ── Overall Progress ────────────────────────────────── */
+  .progress-section {
+    display: none;
+  }
+
+  .progress-section.visible {
+    display: block;
+  }
+
+  .overall-progress {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .progress-pct {
+    font-size: 24px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--cyan);
+  }
+
+  .progress-speed {
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+  }
+
+  .progress-bar {
+    height: 8px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--cyan), #66E0FF);
+    border-radius: 4px;
+    transition: width 0.15s ease;
+    position: relative;
+  }
+
+  .progress-fill::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+  }
+
+  .progress-detail {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .progress-section.complete .progress-fill {
+    background: linear-gradient(90deg, var(--green), #66FFB8);
+  }
+
+  .progress-section.complete .progress-pct {
+    color: var(--green);
+  }
+
+  /* ── Send Button ─────────────────────────────────────── */
+  .send-section {
+    display: none;
+  }
+
+  .send-section.visible {
+    display: flex;
+    gap: 10px;
+  }
+
+  .send-btn {
+    flex: 1;
+    padding: 16px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .send-btn.primary {
+    background: linear-gradient(135deg, var(--cyan), #0088CC);
+    color: #000;
+    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3);
+  }
+
+  .send-btn.primary:hover {
+    box-shadow: 0 6px 28px rgba(0, 212, 255, 0.4);
+    transform: translateY(-1px);
+  }
+
+  .send-btn.primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .send-btn.secondary {
+    background: var(--surface);
+    color: var(--muted);
+    border: 1px solid rgba(255,255,255,0.1);
+    flex: 0 0 auto;
+    padding: 16px 20px;
+  }
+
+  /* ── Log Section ─────────────────────────────────────── */
+  .log-section {
+    display: none;
+  }
+
+  .log-section.visible {
+    display: block;
+  }
+
+  .log-container {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .log-entry {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 3px 0;
+    display: flex;
+    gap: 8px;
+  }
+
+  .log-time {
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .log-msg { color: var(--text); }
+  .log-msg.success { color: var(--green); }
+  .log-msg.error { color: var(--red); }
+  .log-msg.info { color: var(--muted); }
+
+  /* ── Footer ──────────────────────────────────────────── */
+  .footer {
+    padding: 12px 20px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .footer a {
+    color: var(--cyan);
+    text-decoration: none;
+  }
+
+  /* ── Animations ──────────────────────────────────────── */
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .file-item {
+    animation: slideIn 0.2s ease forwards;
+  }
+
+  /* ── Scrollbar ───────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────── -->
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">📁</div>
+    <span class="logo-text">FileDrop</span>
+  </div>
+  <div id="statusPill" class="status-pill connecting">
+    <div class="status-dot"></div>
+    <span id="statusText">Connecting...</span>
+  </div>
+</div>
+
+<!-- ── Content ─────────────────────────────────────────── -->
+<div class="content">
+
+  <!-- Drop Zone -->
+  <div id="dropZone" class="drop-zone">
+    <span class="drop-zone-icon">📤</span>
+    <div class="drop-zone-title">Send Files to Laptop</div>
+    <div class="drop-zone-subtitle">Tap to browse or drag files here</div>
+    <button class="select-btn" onclick="document.getElementById('fileInput').click()">
+      📎 Select Files
+    </button>
+    <input type="file" id="fileInput" class="file-input" multiple>
+  </div>
+
+  <!-- Send Button -->
+  <div id="sendSection" class="send-section">
+    <button id="sendBtn" class="send-btn primary" onclick="startTransfer()">
+      🚀 Send Files
+    </button>
+    <button class="send-btn secondary" onclick="clearFiles()">✕</button>
+  </div>
+
+  <!-- File Queue -->
+  <div id="queueSection" class="queue-section">
+    <div class="section-header">
+      <span class="section-title">Transfer Queue</span>
+      <span id="queueStats" class="queue-stats"></span>
+    </div>
+    <div id="fileList" class="file-list"></div>
+  </div>
+
+  <!-- Overall Progress -->
+  <div id="progressSection" class="progress-section">
+    <div class="overall-progress">
+      <div class="progress-header">
+        <span id="progressPct" class="progress-pct">0%</span>
+        <span id="progressSpeed" class="progress-speed"></span>
+      </div>
+      <div class="progress-bar">
+        <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+      </div>
+      <div class="progress-detail">
+        <span id="progressTransferred">0 B / 0 B</span>
+        <span id="progressEta"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div id="logSection" class="log-section">
+    <div class="section-header">
+      <span class="section-title">Transfer Log</span>
+    </div>
+    <div id="logContainer" class="log-container"></div>
+  </div>
+</div>
+
+<!-- ── Footer ──────────────────────────────────────────── -->
+<div class="footer">
+  FileDrop v0.1.0 · Secure local transfer · No cloud, no internet
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// FileDrop Web Client — WebSocket Transfer Protocol
+// ══════════════════════════════════════════════════════════
+
+const CHUNK_SIZE = 256 * 1024; // 256KB — matches Rust server
+let ws = null;
+let selectedFiles = [];
+let transferring = false;
+let totalBytes = 0;
+let totalSent = 0;
+let transferStart = 0;
+
+// ── WebSocket Connection ──────────────────────────────────
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${proto}//${location.host}/ws`;
+  
+  setStatus('connecting', 'Connecting...');
+  log('Connecting to laptop...', 'info');
+  
+  ws = new WebSocket(url);
+  ws.binaryType = 'arraybuffer';
+  
+  ws.onopen = () => {
+    setStatus('connected', 'Connected');
+    log('Connected to laptop ✓', 'success');
+  };
+  
+  ws.onclose = () => {
+    setStatus('disconnected', 'Disconnected');
+    log('Connection closed', 'info');
+    // Auto-reconnect after 3s unless we're transferring
+    if (!transferring) {
+      setTimeout(connect, 3000);
+    }
+  };
+  
+  ws.onerror = () => {
+    setStatus('disconnected', 'Error');
+    log('WebSocket error', 'error');
+  };
+  
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      handleServerMessage(msg);
+    } catch (e) {
+      // Binary data or invalid JSON — ignore
+    }
+  };
+}
+
+function handleServerMessage(msg) {
+  switch (msg.type) {
+    case 'file_ack':
+      if (msg.success) {
+        log(`✓ File received and verified`, 'success');
+      } else {
+        log(`✗ File rejected: ${msg.error || 'unknown error'}`, 'error');
+      }
+      break;
+    case 'pong':
+      // Keep-alive response
+      break;
+  }
+}
+
+// ── File Selection ────────────────────────────────────────
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', (e) => {
+  if (e.target.tagName !== 'BUTTON') fileInput.click();
+});
+
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('dragover');
+});
+
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  addFiles(e.dataTransfer.files);
+});
+
+fileInput.addEventListener('change', () => {
+  addFiles(fileInput.files);
+  fileInput.value = ''; // Reset so same file can be added again
+});
+
+function addFiles(fileList) {
+  for (const file of fileList) {
+    // Skip duplicates
+    if (selectedFiles.find(f => f.name === file.name && f.size === file.size)) continue;
+    selectedFiles.push(file);
+  }
+  renderQueue();
+}
+
+function clearFiles() {
+  if (transferring) return;
+  selectedFiles = [];
+  renderQueue();
+}
+
+function renderQueue() {
+  const queueSection = document.getElementById('queueSection');
+  const sendSection = document.getElementById('sendSection');
+  const fileList = document.getElementById('fileList');
+  const queueStats = document.getElementById('queueStats');
+  
+  if (selectedFiles.length === 0) {
+    queueSection.classList.remove('visible');
+    sendSection.classList.remove('visible');
+    fileList.innerHTML = '';
+    return;
+  }
+  
+  queueSection.classList.add('visible');
+  if (!transferring) {
+    sendSection.classList.add('visible');
+  }
+  
+  const totalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+  queueStats.textContent = `${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''} · ${formatBytes(totalSize)}`;
+  
+  fileList.innerHTML = selectedFiles.map((file, i) => `
+    <div class="file-item" id="file-${i}" data-index="${i}">
+      <div class="file-info">
+        <div class="file-name">
+          <span>${getFileIcon(file.name)} ${escapeHtml(file.name)}</span>
+        </div>
+        <span class="file-size">${formatBytes(file.size)}</span>
+      </div>
+      <div class="file-progress-bar">
+        <div class="file-progress-fill" id="fileProg-${i}" style="width: 0%"></div>
+      </div>
+      <div class="file-status" id="fileStatus-${i}">Queued</div>
+    </div>
+  `).join('');
+}
+
+// ── File Transfer ─────────────────────────────────────────
+
+async function startTransfer() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    log('Not connected to laptop!', 'error');
+    return;
+  }
+  
+  if (selectedFiles.length === 0) return;
+  if (transferring) return;
+  
+  transferring = true;
+  totalBytes = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+  totalSent = 0;
+  transferStart = performance.now();
+  
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('sendSection').classList.remove('visible');
+  document.getElementById('progressSection').classList.add('visible');
+  document.getElementById('logSection').classList.add('visible');
+  
+  log(`Starting transfer: ${selectedFiles.length} files, ${formatBytes(totalBytes)}`, 'info');
+  
+  // Send BatchStart if multiple files
+  if (selectedFiles.length > 1) {
+    ws.send(JSON.stringify({
+      type: 'batch_start',
+      file_count: selectedFiles.length,
+      total_size: totalBytes
+    }));
+  }
+  
+  let successful = 0;
+  let failed = 0;
+  
+  for (let i = 0; i < selectedFiles.length; i++) {
+    try {
+      await sendFile(selectedFiles[i], i);
+      successful++;
+    } catch (err) {
+      failed++;
+      log(`✗ ${selectedFiles[i].name}: ${err.message}`, 'error');
+      setFileStatus(i, 'error', `Error: ${err.message}`);
+    }
+  }
+  
+  // Send BatchDone
+  if (selectedFiles.length > 1) {
+    ws.send(JSON.stringify({
+      type: 'batch_done',
+      successful: successful,
+      failed: failed
+    }));
+  }
+  
+  transferring = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('progressSection').classList.add('complete');
+  
+  log(`Transfer complete: ${successful} succeeded, ${failed} failed`, 
+      failed > 0 ? 'error' : 'success');
+}
+
+async function sendFile(file, index) {
+  const fileEl = document.getElementById(`file-${index}`);
+  fileEl.classList.add('active');
+  
+  // 1. Hash the file
+  setFileStatus(index, 'hashing', 'Hashing...');
+  log(`Hashing '${file.name}'...`, 'info');
+  
+  const hash = await computeSHA256(file);
+  const hashShort = hash.substring(0, 12);
+  
+  log(`'${file.name}' (${formatBytes(file.size)}) sha256:${hashShort}...`, 'info');
+  
+  // 2. Send FileStart
+  setFileStatus(index, 'sending', 'Starting...');
+  ws.send(JSON.stringify({
+    type: 'file_start',
+    name: file.name,
+    size: file.size,
+    sha256: hash,
+    mime_type: file.type || null
+  }));
+  
+  // 3. Stream binary chunks
+  const fileSentBefore = totalSent;
+  let fileSent = 0;
+  
+  for (let offset = 0; offset < file.size; offset += CHUNK_SIZE) {
+    const end = Math.min(offset + CHUNK_SIZE, file.size);
+    const chunk = file.slice(offset, end);
+    const buffer = await chunk.arrayBuffer();
+    
+    // Wait if WebSocket buffer is full (backpressure)
+    while (ws.bufferedAmount > CHUNK_SIZE * 4) {
+      await sleep(10);
+    }
+    
+    ws.send(buffer);
+    
+    fileSent = end;
+    totalSent = fileSentBefore + fileSent;
+    
+    // Update progress
+    const filePct = (fileSent / file.size * 100).toFixed(0);
+    setFileProgress(index, filePct);
+    setFileStatus(index, 'sending', `${filePct}% · ${formatBytes(fileSent)} / ${formatBytes(file.size)}`);
+    updateOverallProgress();
+  }
+  
+  // 4. Send FileDone
+  ws.send(JSON.stringify({
+    type: 'file_done',
+    checksum: `sha256:${hash}`
+  }));
+  
+  // 5. Wait for ACK (with timeout)
+  setFileStatus(index, 'sending', 'Verifying...');
+  
+  const ack = await waitForAck(10000);
+  
+  if (ack && ack.success) {
+    setFileProgress(index, 100);
+    setFileStatus(index, 'done', '✓ Verified');
+    fileEl.classList.remove('active');
+    fileEl.classList.add('completed');
+    const elapsed = ((performance.now() - transferStart) / 1000).toFixed(1);
+    log(`✓ '${file.name}' sent (${formatBytes(file.size)})`, 'success');
+  } else {
+    const errMsg = ack ? (ack.error || 'Rejected') : 'ACK timeout';
+    fileEl.classList.remove('active');
+    fileEl.classList.add('failed');
+    throw new Error(errMsg);
+  }
+}
+
+function waitForAck(timeoutMs) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      ws.removeEventListener('message', handler);
+      resolve(null);
+    }, timeoutMs);
+    
+    function handler(event) {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'file_ack') {
+          clearTimeout(timer);
+          ws.removeEventListener('message', handler);
+          resolve(msg);
+        }
+      } catch (e) { /* not JSON */ }
+    }
+    
+    ws.addEventListener('message', handler);
+  });
+}
+
+// ── SHA-256 Hashing (pure JS — works over HTTP) ──────────
+
+async function computeSHA256(file) {
+  // crypto.subtle is only available in secure contexts (HTTPS/localhost).
+  // Over plain HTTP on mobile, it's undefined. Use our pure-JS fallback.
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  return sha256(bytes);
+}
+
+// Pure JavaScript SHA-256 — no dependencies, works over HTTP
+function sha256(data) {
+  const K = new Uint32Array([
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ]);
+
+  function rr(x, n) { return (x >>> n) | (x << (32 - n)); }
+
+  let h0=0x6a09e667, h1=0xbb67ae85, h2=0x3c6ef372, h3=0xa54ff53a;
+  let h4=0x510e527f, h5=0x9b05688c, h6=0x1f83d9ab, h7=0x5be0cd19;
+
+  const len = data.length;
+  const bitLen = len * 8;
+
+  // Pre-processing: padding
+  const padLen = ((56 - (len + 1) % 64) + 64) % 64;
+  const padded = new Uint8Array(len + 1 + padLen + 8);
+  padded.set(data);
+  padded[len] = 0x80;
+  // Length in bits as big-endian 64-bit
+  const dv = new DataView(padded.buffer);
+  dv.setUint32(padded.length - 4, bitLen, false);
+
+  const W = new Uint32Array(64);
+
+  for (let off = 0; off < padded.length; off += 64) {
+    for (let i = 0; i < 16; i++) {
+      W[i] = dv.getUint32(off + i * 4, false);
+    }
+    for (let i = 16; i < 64; i++) {
+      const s0 = rr(W[i-15],7) ^ rr(W[i-15],18) ^ (W[i-15]>>>3);
+      const s1 = rr(W[i-2],17) ^ rr(W[i-2],19)  ^ (W[i-2]>>>10);
+      W[i] = (W[i-16] + s0 + W[i-7] + s1) | 0;
+    }
+
+    let a=h0, b=h1, c=h2, d=h3, e=h4, f=h5, g=h6, h=h7;
+    for (let i = 0; i < 64; i++) {
+      const S1 = rr(e,6) ^ rr(e,11) ^ rr(e,25);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + ch + K[i] + W[i]) | 0;
+      const S0 = rr(a,2) ^ rr(a,13) ^ rr(a,22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) | 0;
+      h=g; g=f; f=e; e=(d+t1)|0; d=c; c=b; b=a; a=(t1+t2)|0;
+    }
+    h0=(h0+a)|0; h1=(h1+b)|0; h2=(h2+c)|0; h3=(h3+d)|0;
+    h4=(h4+e)|0; h5=(h5+f)|0; h6=(h6+g)|0; h7=(h7+h)|0;
+  }
+
+  return [h0,h1,h2,h3,h4,h5,h6,h7]
+    .map(v => (v >>> 0).toString(16).padStart(8, '0')).join('');
+}
+
+// ── UI Helpers ────────────────────────────────────────────
+
+function setStatus(type, text) {
+  const pill = document.getElementById('statusPill');
+  const statusText = document.getElementById('statusText');
+  pill.className = `status-pill ${type}`;
+  statusText.textContent = text;
+}
+
+function setFileProgress(index, pct) {
+  const el = document.getElementById(`fileProg-${index}`);
+  if (el) el.style.width = `${pct}%`;
+}
+
+function setFileStatus(index, cls, text) {
+  const el = document.getElementById(`fileStatus-${index}`);
+  if (el) {
+    el.className = `file-status ${cls}`;
+    el.textContent = text;
+  }
+}
+
+function updateOverallProgress() {
+  const pct = totalBytes > 0 ? (totalSent / totalBytes * 100) : 0;
+  const elapsed = (performance.now() - transferStart) / 1000;
+  const speed = elapsed > 0 ? totalSent / elapsed : 0;
+  const remaining = speed > 0 ? (totalBytes - totalSent) / speed : 0;
+  
+  document.getElementById('progressPct').textContent = `${pct.toFixed(0)}%`;
+  document.getElementById('progressFill').style.width = `${pct}%`;
+  document.getElementById('progressSpeed').textContent = `${formatBytes(speed)}/s`;
+  document.getElementById('progressTransferred').textContent = 
+    `${formatBytes(totalSent)} / ${formatBytes(totalBytes)}`;
+  document.getElementById('progressEta').textContent = 
+    remaining > 0 ? `ETA ${formatTime(remaining)}` : '';
+}
+
+function log(message, type = 'info') {
+  const container = document.getElementById('logContainer');
+  const logSection = document.getElementById('logSection');
+  logSection.classList.add('visible');
+  
+  const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `
+    <span class="log-time">${time}</span>
+    <span class="log-msg ${type}">${escapeHtml(message)}</span>
+  `;
+  container.appendChild(entry);
+  container.scrollTop = container.scrollHeight;
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const val = bytes / Math.pow(1024, i);
+  return `${val >= 100 ? val.toFixed(0) : val.toFixed(1)} ${units[i]}`;
+}
+
+function formatTime(seconds) {
+  if (seconds < 60) return `${Math.ceil(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.ceil(seconds % 60);
+  return `${m}m ${s}s`;
+}
+
+function getFileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const icons = {
+    jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', webp: '🖼️', svg: '🖼️',
+    mp4: '🎬', mov: '🎬', avi: '🎬', mkv: '🎬', webm: '🎬',
+    mp3: '🎵', wav: '🎵', flac: '🎵', aac: '🎵', ogg: '🎵',
+    pdf: '📄', doc: '📄', docx: '📄', txt: '📄', rtf: '📄',
+    zip: '📦', rar: '📦', '7z': '📦', tar: '📦', gz: '📦',
+    apk: '📱', exe: '💻', dmg: '💻',
+    pptx: '📊', xlsx: '📊', csv: '📊',
+  };
+  return icons[ext] || '📎';
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+// ── Initialize ────────────────────────────────────────────
+connect();
+</script>
+</body>
+</html>
