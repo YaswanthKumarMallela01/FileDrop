@@ -219,12 +219,16 @@ async fn handle_connection(mut socket: WebSocket, state: Arc<ServerState>) {
                                 }
                             }
 
-                            ControlMessage::FileDone { checksum: _ } => {
-                                if let Some(transfer) = active_transfer.take() {
+                            ControlMessage::FileDone { checksum } => {
+                                if let Some(mut transfer) = active_transfer.take() {
                                     let file_name = transfer.file_name.clone();
                                     let elapsed =
                                         transfer.started_at.elapsed().as_secs_f64();
                                     let bytes = transfer.writer.bytes_written();
+
+                                    // Set the expected hash from the checksum in file_done
+                                    // This supports streaming mode where hash arrives after data
+                                    transfer.writer.set_expected_hash(checksum);
 
                                     match transfer.writer.finalize().await {
                                         Ok(true) => {
@@ -269,6 +273,18 @@ async fn handle_connection(mut socket: WebSocket, state: Arc<ServerState>) {
                                                     file_name
                                                 ),
                                             });
+                                            // Send NACK
+                                            let nack = protocol::serialize_control_message(
+                                                &ControlMessage::FileAck {
+                                                    success: false,
+                                                    error: Some("Checksum mismatch".to_string()),
+                                                },
+                                            );
+                                            if let Ok(json) = nack {
+                                                let _ = socket
+                                                    .send(Message::Text(json.into()))
+                                                    .await;
+                                            }
                                         }
                                         Err(e) => {
                                             let _ = state.event_tx.send(

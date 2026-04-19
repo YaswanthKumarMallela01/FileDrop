@@ -12,10 +12,14 @@ pub enum AppEvent {
     ScrollUp,
     /// Scroll file queue down
     ScrollDown,
-    /// Scroll log panel up
+    /// Scroll log panel up (one page)
     LogScrollUp,
-    /// Scroll log panel down
+    /// Scroll log panel down (one page)
     LogScrollDown,
+    /// Jump to top of queue
+    ScrollHome,
+    /// Jump to bottom of queue
+    ScrollEnd,
     /// Periodic tick for updates
     #[allow(dead_code)]
     Tick,
@@ -59,22 +63,24 @@ pub async fn poll_keyboard_events(tx: mpsc::UnboundedSender<AppEvent>) {
 /// Map a crossterm key event to an application event
 fn map_key_event(key: KeyEvent) -> Option<AppEvent> {
     match key.code {
-        // Quit: Q or Ctrl+C
+        // Quit: Q or Ctrl+C or Escape
         KeyCode::Char('q') | KeyCode::Char('Q') => Some(AppEvent::Quit),
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             Some(AppEvent::Quit)
         }
+        KeyCode::Esc => Some(AppEvent::Quit),
 
         // File queue navigation
         KeyCode::Up | KeyCode::Char('k') => Some(AppEvent::ScrollUp),
         KeyCode::Down | KeyCode::Char('j') => Some(AppEvent::ScrollDown),
 
+        // Home / End for queue
+        KeyCode::Home | KeyCode::Char('h') | KeyCode::Char('H') => Some(AppEvent::ScrollHome),
+        KeyCode::End | KeyCode::Char('e') | KeyCode::Char('E') => Some(AppEvent::ScrollEnd),
+
         // Log panel navigation
         KeyCode::PageUp => Some(AppEvent::LogScrollUp),
         KeyCode::PageDown => Some(AppEvent::LogScrollDown),
-
-        // Escape also quits
-        KeyCode::Esc => Some(AppEvent::Quit),
 
         _ => None,
     }

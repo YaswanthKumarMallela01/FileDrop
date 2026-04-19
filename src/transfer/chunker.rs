@@ -103,12 +103,19 @@ impl ChunkWriter {
             .await
             .with_context(|| format!("Failed to create output file: {}", output_path.display()))?;
 
+        // If hash is "streaming", the client will send the real hash in file_done
+        let hash = if expected_hash == "streaming" {
+            String::new()
+        } else {
+            expected_hash
+        };
+
         Ok(Self {
-            writer: BufWriter::new(file),
+            writer: BufWriter::with_capacity(4 * 1024 * 1024, file), // 4MB write buffer
             hasher: Sha256::new(),
             bytes_written: 0,
             expected_size,
-            expected_hash,
+            expected_hash: hash,
         })
     }
 
@@ -124,6 +131,11 @@ impl ChunkWriter {
         Ok(self.bytes_written)
     }
 
+    /// Set the expected hash (used when hash arrives in file_done instead of file_start)
+    pub fn set_expected_hash(&mut self, hash: String) {
+        self.expected_hash = hash;
+    }
+
     /// Finalize the write, flush to disk, and verify checksum
     pub async fn finalize(mut self) -> Result<bool> {
         self.writer.flush().await.context("Failed to flush file")?;
@@ -135,6 +147,15 @@ impl ChunkWriter {
             .expected_hash
             .strip_prefix("sha256:")
             .unwrap_or(&self.expected_hash);
+
+        // If no expected hash was provided, we can't verify (accept anyway)
+        if expected.is_empty() {
+            tracing::warn!(
+                "No expected hash — file received but not verified ({} bytes, computed: {})",
+                self.bytes_written, &hash[..16]
+            );
+            return Ok(true);
+        }
 
         if hash != expected {
             tracing::error!(

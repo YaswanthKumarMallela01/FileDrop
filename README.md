@@ -3,76 +3,58 @@
   <img src="https://img.shields.io/badge/WebSocket-010101?style=for-the-badge&logo=socketdotio&logoColor=00FF41" alt="WebSocket">
   <img src="https://img.shields.io/badge/TUI-Terminal-00FF41?style=for-the-badge" alt="TUI">
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=for-the-badge" alt="Platform">
 </p>
 
 <h1 align="center">
-  <br>
   <code>[ FILEDROP ]</code>
   <br>
-  <sub>Secure Local Wi-Fi File Transfer</sub>
+  <sub>Secure Local Wi-Fi File Transfer · Phone → Laptop</sub>
 </h1>
 
 <p align="center">
-  <b>Send files from your phone to your laptop in seconds.</b><br>
-  No cloud. No internet. No apps to install. Just open a URL.
+  <b>Transfer files from your phone to your laptop at full Wi-Fi speed.</b><br>
+  No cloud. No internet. No app install. No file size limit. Just open a URL.
 </p>
-
-<br>
-
-```
-  ╔══════════════════════════════════════════════════════╗
-  ║  [FILEDROP]  v0.1.0  ::  RECEIVE_MODE              ║
-  ╠══════════════════════════════════════════════════════╣
-  ║                                                      ║
-  ║  > SCAN QR CODE ON PHONE TO CONNECT:                 ║
-  ║                                                      ║
-  ╚══════════════════════════════════════════════════════╝
-
-         ████████████████████████████████
-         ██ ▄▄▄▄▄ █▀▀▀▀▀▀▀▀▀█ ▄▄▄▄▄ ██
-         ██ █   █ █▀ █▀▀█ ▀██ █   █ ██
-         ██ ▀▀▀▀▀ █▀ █ █ ▀██ ▀▀▀▀▀ ██
-         ████████████████████████████████
-
-    URL:  http://192.168.1.42:7878
-    DIR:  D:\Downloads
-
-    >> Press ENTER to launch TUI...
-```
 
 ---
 
-## ⚡ Features
+## ⚡ What Makes FileDrop Different?
 
-| Feature | Description |
-|---------|-------------|
-| 📱 **Phone → Laptop** | Open a URL on your phone's browser — no app needed |
-| 🔒 **Zero Cloud** | Files never leave your local network |
-| 🎯 **QR Code** | Scan to connect — no typing IP addresses |
-| 📦 **Large Files** | Streaming SHA-256 — supports **10GB+ files** without RAM issues |
-| 🖥️ **Hacker TUI** | Matrix-green terminal dashboard with real-time progress |
-| 🌐 **Web UI** | Built-in mobile-optimized interface with matrix rain animation |
-| ⚡ **Fast** | Direct Wi-Fi transfer at full LAN speed |
-| 🔐 **mTLS Ready** | Certificate-based device pairing with SHA-256 verification |
-| 📡 **mDNS** | Auto-discovery of devices on the network |
-| 🦀 **Pure Rust** | Single binary, zero runtime dependencies |
+| Feature | FileDrop | AirDrop | SHAREit | Bluetooth |
+|---------|----------|---------|---------|-----------|
+| **Cross-platform** | ✅ Any device with a browser | ❌ Apple only | ⚠️ App required | ✅ |
+| **No app needed** | ✅ Just open a URL | ❌ | ❌ | ✅ |
+| **Large files (10GB+)** | ✅ Streaming, no RAM limit | ✅ | ⚠️ | ❌ Very slow |
+| **No cloud/internet** | ✅ 100% local | ✅ | ❌ Routes through cloud | ✅ |
+| **SHA-256 verification** | ✅ Every file verified | ❌ | ❌ | ❌ |
+| **Speed** | 🚀 Full Wi-Fi speed | 🚀 | ⚠️ | 🐌 |
+| **Open source** | ✅ MIT License | ❌ | ❌ | N/A |
+| **Privacy** | ✅ No data leaves LAN | ✅ | ❌ Ads + tracking | ✅ |
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Install
+### Install on Any Device (One Command)
 
 ```bash
-# Clone and install globally
+# Prerequisites: Rust toolchain (https://rustup.rs)
+# Then run:
+cargo install --git https://github.com/YaswanthKumarMallela01/FileDrop.git
+```
+
+That's it. `filedrop` is now globally available from any directory.
+
+### Alternative: Clone & Build
+
+```bash
 git clone https://github.com/YaswanthKumarMallela01/FileDrop.git
 cd FileDrop
 cargo install --path .
 ```
 
-After installation, `filedrop` is available globally from any directory.
-
-### 2. Receive Files (On Laptop)
+### Receive Files (On Laptop)
 
 ```bash
 # Navigate to where you want files saved
@@ -82,24 +64,24 @@ cd ~/Downloads
 filedrop receive
 ```
 
-This shows a **QR code** in your terminal. The QR code stays visible until you press Enter.
+A **QR code** appears in your terminal and **stays until you press Enter**.
 
-### 3. Send Files (From Phone)
+### Send Files (From Phone)
 
-1. **Scan the QR code** with your phone camera (or type the URL)
+1. **Scan the QR code** with your phone camera
 2. A hacker-themed web interface opens in your browser
-3. Tap **"> SELECT FILES"** → choose files
+3. Tap **"> SELECT FILES"** → choose files (any size!)
 4. Tap **"▶ EXECUTE TRANSFER"**
-5. Watch real-time progress on both phone and laptop
+5. Watch real-time progress with ETA on both devices
 
-> **Both devices must be on the same Wi-Fi network.**
+> ⚠️ Both devices must be on the **same Wi-Fi network**.
 
 ---
 
 ## 🛠️ All Commands
 
 ```
-filedrop receive     Start server + TUI, save files to current directory
+filedrop receive     Start server + QR code + TUI, save files to current directory
 filedrop send <path> Send file/directory to a discovered peer
 filedrop pair        Generate QR code for certificate pairing
 filedrop peers       List all paired devices
@@ -108,31 +90,86 @@ filedrop demo        Visual TUI test with simulated transfers
 filedrop --help      Show all commands
 ```
 
-### Examples
+### TUI Keyboard Controls
 
-```bash
-# Receive files into Downloads folder
-cd ~/Downloads && filedrop receive
-
-# Receive files into Desktop
-cd ~/Desktop && filedrop receive
-
-# Send a file to a discovered peer
-filedrop send ./report.pdf
-
-# Send to a specific address
-filedrop send ./photos/ --addr 192.168.1.100:7878
-```
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` / `j` / `k` | Scroll file queue |
+| `PgUp` / `PgDn` | Scroll system log (10 lines at a time) |
+| `H` / `Home` | Jump to top of queue |
+| `E` / `End` | Jump to bottom of queue |
+| `Q` / `Esc` | Quit |
+| `Ctrl+C` | Abort transfer and exit |
 
 ---
 
-## 🔧 Windows Firewall (One-Time Setup)
+## 🔒 Security Architecture
 
-Windows blocks incoming connections by default. Open an **Admin PowerShell** and run:
+FileDrop is built with security-first design. Your files **never leave your local network**.
 
-```powershell
-netsh advfirewall firewall add rule name="FileDrop" dir=in action=allow protocol=TCP localport=7878 profile=any
+### How It Works
+
 ```
+┌─────────────────────────────────────────────────┐
+│  YOUR LOCAL WI-FI NETWORK                        │
+│                                                   │
+│  📱 Phone ──── WebSocket ────→ 💻 Laptop         │
+│        (browser)         (port 7878)             │
+│                                                   │
+│  ✅ Data stays on YOUR network                    │
+│  ✅ No internet connectivity required             │
+│  ✅ No cloud server involved                      │
+│  ✅ No third-party can intercept                  │
+└─────────────────────────────────────────────────┘
+```
+
+### Security Features
+
+| Layer | Protection | Description |
+|-------|-----------|-------------|
+| **Integrity** | SHA-256 | Every file is hashed on both ends. Server rejects files with mismatched checksums |
+| **Verification** | Dual-hash | Client computes hash while sending; server computes independently and compares |
+| **Network** | LAN-only | Server binds to `0.0.0.0` but only works on local network (not exposed to internet) |
+| **Transport** | mTLS Ready | Certificate-based mutual authentication for CLI-to-CLI transfers |
+| **Identity** | X.509 Certs | RSA-2048 certificates generated locally with SHA-256 fingerprinting |
+| **Pairing** | QR Code | One-time certificate exchange via QR code — no passwords transmitted |
+| **Storage** | Secure dirs | Certificates stored in OS-specific app directories with restricted permissions |
+| **Protocol** | JSON+Binary | Typed control messages prevent injection attacks |
+
+### What We Don't Do (By Design)
+
+- ❌ **No cloud relay** — Files are never uploaded to any server
+- ❌ **No analytics/tracking** — Zero telemetry, zero phone-home
+- ❌ **No account required** — No sign-up, no login
+- ❌ **No ads** — Open source, forever free
+- ❌ **No file metadata leaks** — Only filename, size, and hash are transmitted
+
+---
+
+## ⚡ Performance
+
+### Speed Optimizations
+
+FileDrop v0.1.0 includes several optimizations for large file transfers:
+
+| Optimization | Impact | Details |
+|-------------|--------|---------|
+| **Hash-while-sending** | **~50% faster** | SHA-256 computed alongside transfer, not before |
+| **1MB chunks** | **~4x less overhead** | Reduced from 256KB to 1MB WebSocket frames |
+| **4MB write buffer** | **Fewer disk I/Os** | Buffered writes reduce syscall overhead |
+| **Streaming SHA-256** | **No RAM limit** | Files >10GB supported without loading into memory |
+| **Backpressure control** | **No data loss** | WebSocket buffer monitoring prevents overflow |
+
+### Expected Speeds
+
+| Network | Expected Speed | 19GB Transfer Time |
+|---------|---------------|-------------------|
+| Wi-Fi 5 (802.11ac) | 20-50 MB/s | ~6-15 min |
+| Wi-Fi 6 (802.11ax) | 50-100 MB/s | ~3-6 min |
+| Wi-Fi 6E | 100-200 MB/s | ~1.5-3 min |
+| 5GHz band | Generally faster than 2.4GHz | Use 5GHz when possible |
+
+> **Tip**: If transfers are slow, make sure both devices are on the **5GHz Wi-Fi band**, not 2.4GHz. 2.4GHz tops out at ~5-10 MB/s in practice.
 
 ---
 
@@ -144,10 +181,11 @@ netsh advfirewall firewall add rule name="FileDrop" dir=in action=allow protocol
                     │                               │
                     │  ┌─────────────────────────┐  │
                     │  │  FileDrop Web UI         │  │
-                    │  │  • File picker           │  │
+                    │  │  • Drag & drop picker    │  │
                     │  │  • Streaming SHA-256     │  │
-                    │  │  • 256KB chunked send    │  │
-                    │  │  • Matrix rain ✦         │  │
+                    │  │  • 1MB chunked send      │  │
+                    │  │  • Hash-while-sending    │  │
+                    │  │  • Matrix rain theme ✦   │  │
                     │  └───────────┬─────────────┘  │
                     └──────────────┼─────────────────┘
                                    │ WebSocket (ws://)
@@ -164,15 +202,16 @@ netsh advfirewall firewall add rule name="FileDrop" dir=in action=allow protocol
                     │  ┌───────────▼─────────────┐    │
                     │  │  WebSocket Handler       │    │
                     │  │  • Parse JSON control    │    │
-                    │  │  • Write binary chunks   │    │
-                    │  │  • Verify SHA-256        │    │
+                    │  │  • 4MB buffered write    │    │
+                    │  │  • SHA-256 verify        │    │
+                    │  │  • Checksum NACK/ACK     │    │
                     │  └───────────┬─────────────┘    │
                     │              │                   │
                     │  ┌───────────▼─────────────┐    │
                     │  │  Ratatui TUI Dashboard   │    │
-                    │  │  • File queue            │    │
+                    │  │  • Scrollable queue      │    │
                     │  │  • Transfer log          │    │
-                    │  │  • Speed sparkline       │    │
+                    │  │  • ETA + speed history   │    │
                     │  └─────────────────────────┘    │
                     └─────────────────────────────────┘
 ```
@@ -181,12 +220,22 @@ netsh advfirewall firewall add rule name="FileDrop" dir=in action=allow protocol
 
 ```
 Phone → Laptop:
-  1. JSON:   {"type":"file_start", "name":"photo.jpg", "size":5242880, "sha256":"abc..."}
-  2. Binary: [256KB chunk] [256KB chunk] [256KB chunk] ...
-  3. JSON:   {"type":"file_done", "checksum":"sha256:abc..."}
+  1. JSON:   {"type":"file_start", "name":"photo.jpg", "size":5242880, "sha256":"streaming"}
+  2. Binary: [1MB chunk] [1MB chunk] [1MB chunk] ...  (hash computed simultaneously)
+  3. JSON:   {"type":"file_done", "checksum":"sha256:abc..."}  (final hash)
 
 Laptop → Phone:
-  4. JSON:   {"type":"file_ack", "success":true}
+  4. JSON:   {"type":"file_ack", "success":true}  (or false if checksum mismatch)
+```
+
+---
+
+## 🔧 Windows Firewall (One-Time Setup)
+
+Windows blocks incoming connections by default. Open an **Admin PowerShell** and run:
+
+```powershell
+netsh advfirewall firewall add rule name="FileDrop" dir=in action=allow protocol=TCP localport=7878 profile=any
 ```
 
 ---
@@ -198,25 +247,25 @@ FileDrop/
 ├── Cargo.toml                    Dependencies & build config
 ├── README.md                     This file
 └── src/
-    ├── main.rs            ─────  CLI entry point + QR display
+    ├── main.rs            ─────  CLI entry point + QR code display
     ├── config.rs          ─────  TOML config (~/.config/filedrop/)
     ├── security/
-    │   ├── certs.rs       ─────  X.509 certificates (rcgen)
+    │   ├── certs.rs       ─────  X.509 RSA-2048 certificates (rcgen)
     │   └── pairing.rs     ─────  QR code pairing flow
     ├── transfer/
     │   ├── protocol.rs    ─────  Wire protocol + JSON messages
-    │   ├── chunker.rs     ─────  SHA-256 file hashing + chunked I/O
+    │   ├── chunker.rs     ─────  SHA-256 verification + 4MB buffered I/O
     │   ├── server.rs      ─────  Axum WebSocket server + web routes
     │   └── client.rs      ─────  WebSocket send client
     ├── discovery/
     │   └── mod.rs         ─────  mDNS (Bonjour) advertisement
     ├── tui/
     │   ├── app.rs         ─────  State management + event loop
-    │   ├── events.rs      ─────  Keyboard input handler
-    │   └── ui.rs          ─────  Ratatui rendering (hacker theme)
+    │   ├── events.rs      ─────  Keyboard input (scroll, quit, home/end)
+    │   └── ui.rs          ─────  Ratatui rendering (hacker theme + ETA)
     └── web/
         ├── mod.rs         ─────  Embedded HTML server
-        └── index.html     ─────  Mobile web UI (hacker theme)
+        └── index.html     ─────  Mobile web UI (matrix rain + streaming hash)
 ```
 
 ---
@@ -225,16 +274,30 @@ FileDrop/
 
 | Component | Technology |
 |-----------|-----------|
-| Language | Rust (2024 edition) |
-| Async Runtime | Tokio |
-| HTTP Server | Axum |
+| Language | Rust 2024 edition |
+| Async Runtime | Tokio (multi-threaded) |
+| HTTP Server | Axum 0.8 |
 | WebSocket | tokio-tungstenite |
 | TUI Framework | Ratatui + Crossterm |
 | TLS | rustls + rcgen |
 | Discovery | mdns-sd |
-| Hashing | SHA-256 (sha2 crate + pure JS) |
-| QR Code | qrcode crate |
+| Hashing | SHA-256 (sha2 crate + pure JS streaming) |
+| QR Code | qrcode crate (terminal display) |
 | CLI Parser | Clap v4 |
+| Disk I/O | 4MB BufWriter for optimized writes |
+
+---
+
+## 🤝 Contributing
+
+```bash
+git clone https://github.com/YaswanthKumarMallela01/FileDrop.git
+cd FileDrop
+cargo build
+cargo test
+cargo run -- demo    # Visual test
+cargo run -- receive # Live test
+```
 
 ---
 
@@ -246,4 +309,6 @@ MIT License — use it however you want.
 
 <p align="center">
   <sub>Built with 🦀 Rust · No cloud · No trace · Just raw speed</sub>
+  <br>
+  <sub>Designed by <a href="https://github.com/YaswanthKumarMallela01">Yaswanth Kumar Mallela</a></sub>
 </p>

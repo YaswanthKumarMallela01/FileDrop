@@ -552,12 +552,18 @@ async fn run_tui(
                             .saturating_add(1)
                             .min(app.file_queue.len().saturating_sub(1));
                     }
+                    AppEvent::ScrollHome => {
+                        app.queue_scroll = 0;
+                    }
+                    AppEvent::ScrollEnd => {
+                        app.queue_scroll = app.file_queue.len().saturating_sub(1);
+                    }
                     AppEvent::LogScrollUp => {
-                        app.log_scroll = app.log_scroll.saturating_sub(1);
+                        app.log_scroll = app.log_scroll.saturating_sub(10);
                     }
                     AppEvent::LogScrollDown => {
                         app.log_scroll = app.log_scroll
-                            .saturating_add(1)
+                            .saturating_add(10)
                             .min(app.log_entries.len().saturating_sub(1));
                     }
                     AppEvent::Tick => {}
