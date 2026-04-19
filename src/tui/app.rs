@@ -412,15 +412,13 @@ pub async fn run_receive(
     // Show QR code with the phone URL before launching TUI
     if let Some(ref url) = phone_url {
         println!();
-        println!("  ╔══════════════════════════════════════════════════╗");
-        println!("  ║  FileDrop v0.1.0 — Receive Mode                 ║");
-        println!("  ╠══════════════════════════════════════════════════╣");
-        println!("  ║                                                  ║");
-        println!("  ║  📱 Open on your phone:                          ║");
-        println!("  ║     {}  ", url);
-        println!("  ║                                                  ║");
-        println!("  ║  Or scan this QR code:                           ║");
-        println!("  ╚══════════════════════════════════════════════════╝");
+        println!("  \x1b[32m╔══════════════════════════════════════════════════════╗\x1b[0m");
+        println!("  \x1b[32m║\x1b[0m  \x1b[1;32m[FILEDROP]\x1b[0m  v0.1.0  ::  RECEIVE_MODE              \x1b[32m║\x1b[0m");
+        println!("  \x1b[32m╠══════════════════════════════════════════════════════╣\x1b[0m");
+        println!("  \x1b[32m║\x1b[0m                                                      \x1b[32m║\x1b[0m");
+        println!("  \x1b[32m║\x1b[0m  \x1b[1;32m> SCAN QR CODE ON PHONE TO CONNECT:\x1b[0m                 \x1b[32m║\x1b[0m");
+        println!("  \x1b[32m║\x1b[0m                                                      \x1b[32m║\x1b[0m");
+        println!("  \x1b[32m╚══════════════════════════════════════════════════════╝\x1b[0m");
         println!();
 
         // Generate and display QR code
@@ -436,20 +434,19 @@ pub async fn run_receive(
         }
 
         println!();
-        println!("  📂 Files will be saved to: {}", std::env::current_dir()
+        println!("  \x1b[32m  URL:\x1b[0m  \x1b[1;32m{}\x1b[0m", url);
+        println!("  \x1b[32m  DIR:\x1b[0m  {}", std::env::current_dir()
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| ".".to_string()));
-        println!("  ⏳ Launching TUI in 5 seconds... (press Enter to skip)");
+        println!();
+        println!("  \x1b[33m  >> Press ENTER to launch TUI...\x1b[0m");
         println!();
 
-        // Wait 5 seconds or until user presses Enter
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_secs(5)) => {}
-            _ = tokio::task::spawn_blocking(|| {
-                let mut input = String::new();
-                let _ = std::io::stdin().read_line(&mut input);
-            }) => {}
-        }
+        // Wait for user to press Enter — no auto-timer
+        tokio::task::spawn_blocking(|| {
+            let mut input = String::new();
+            let _ = std::io::stdin().read_line(&mut input);
+        }).await.ok();
     }
 
     // Run the TUI event loop with the server event channel

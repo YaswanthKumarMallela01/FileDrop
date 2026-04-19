@@ -1,29 +1,18 @@
-//! TUI rendering — Ratatui widget composition.
+//! TUI rendering — Hacker-themed Ratatui widget composition.
 //!
-//! Implements the exact layout from the spec:
-//! ┌─────────────────────────────────────────────┐
-//! │  FileDrop  v0.1  [RECEIVE MODE]  📡 Ready   │  ← Header bar
-//! ├────────────────────┬────────────────────────┤
-//! │  FILE QUEUE        │  TRANSFER LOG          │
-//! │  ─────────────     │  ─────────────         │
-//! │  > photo.jpg  2MB  │  [12:04:01] Connected  │
-//! │    video.mp4 800MB │  [12:04:02] Receiving  │
-//! │    doc.pdf   400KB │    photo.jpg...        │
-//! │                    │  [12:04:05] Done ✓     │
-//! ├────────────────────┴────────────────────────┤
-//! │  ████████████████░░░░░░░  68%  2.1 MB/s     │  ← Progress bar
-//! │  Speed: ▂▃▅▆▇▇▅▄▃▂  (sparkline)            │
-//! │  Ctrl+C to cancel  |  Q to quit             │  ← Keybinds hint
-//! └─────────────────────────────────────────────┘
-//!
-//! Colors from the Stitch design system:
-//! - Background: terminal default (transparent)
-//! - Header: Bold white text, teal/cyan border
-//! - Active file: Bold cyan
-//! - Done files: Dim green with ✓
-//! - Progress filled: Cyan / unfilled: Dark gray
-//! - Log timestamps: Dim gray; messages: white
-//! - Error messages: Bold red
+//! ╔═══════════════════════════════════════════════════╗
+//! ║  [FILEDROP] v0.1  ::  RECEIVE_MODE  ::  ONLINE   ║
+//! ╠═════════════════════╤═════════════════════════════╣
+//! ║  [ TRANSFER QUEUE ] │  [ SYSTEM LOG ]             ║
+//! ║  ─────────────────  │  ───────────────            ║
+//! ║  > photo.jpg  2MB   │  [09:41:31] SYS: READY      ║
+//! ║    video.mp4 800MB  │  [09:41:32] RX: Incoming     ║
+//! ║    doc.pdf   400KB  │  [09:41:35] OK: Verified ✓   ║
+//! ╠═════════════════════╧═════════════════════════════╣
+//! ║  ████████████░░░░░░░  68%  2.1 MB/s               ║
+//! ║  Speed: ▂▃▅▆▇▇▅▄▃▂                                ║
+//! ║  [CTRL+C] abort  [Q] exit  [↑↓] scroll            ║
+//! ╚═══════════════════════════════════════════════════╝
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -37,34 +26,36 @@ use crate::transfer::protocol::{self, TransferStatus};
 
 use super::app::{AppState, LogLevel};
 
-// ── Design System Colors (from Stitch) ──────────────────────────────────────
+// ── Hacker Theme Colors ─────────────────────────────────────────────────────
 
-/// Primary cyan accent — #00D4FF
-const CYAN: Color = Color::Rgb(0, 212, 255);
-/// Surface container low — used for subtle element backgrounds
+/// Matrix green — primary accent
+const GREEN: Color = Color::Rgb(0, 255, 65);
+/// Dim green for backgrounds
+const GREEN_DIM: Color = Color::Rgb(0, 80, 25);
+/// Bright green for active elements
+const GREEN_BRIGHT: Color = Color::Rgb(100, 255, 130);
+/// Dark background
 #[allow(dead_code)]
-const SURFACE_LOW: Color = Color::Rgb(25, 27, 34);
-/// Surface container high — elevated panels
+const BG_DARK: Color = Color::Rgb(10, 10, 10);
+/// Surface color
 #[allow(dead_code)]
-const SURFACE_HIGH: Color = Color::Rgb(40, 42, 48);
+const SURFACE: Color = Color::Rgb(15, 15, 15);
 /// Muted text / timestamps
-const MUTED: Color = Color::Rgb(138, 143, 152);
-/// Success green — completed transfers
-const SUCCESS_GREEN: Color = Color::Rgb(78, 222, 163);
+const MUTED: Color = Color::Rgb(85, 85, 85);
 /// Error red — failed transfers
-const ERROR_RED: Color = Color::Rgb(255, 180, 171);
+const ERROR_RED: Color = Color::Rgb(255, 0, 51);
 /// Warning amber
-const WARNING_AMBER: Color = Color::Rgb(255, 185, 90);
+const WARNING_AMBER: Color = Color::Rgb(255, 176, 0);
 /// Dark gray for unfilled progress
-const DARK_GRAY: Color = Color::Rgb(60, 73, 78);
-/// On-surface text (not pure white)
-const TEXT_PRIMARY: Color = Color::Rgb(226, 226, 235);
-/// Dim text for secondary info
-const TEXT_DIM: Color = Color::Rgb(133, 147, 152);
-/// Border color — ghost border
-const BORDER: Color = Color::Rgb(60, 73, 78);
-/// Bright border for active elements
-const BORDER_ACTIVE: Color = CYAN;
+const DARK_GRAY: Color = Color::Rgb(30, 30, 30);
+/// Primary text
+const TEXT_PRIMARY: Color = Color::Rgb(180, 180, 180);
+/// Dim text
+const TEXT_DIM: Color = Color::Rgb(100, 100, 100);
+/// Border color
+const BORDER: Color = Color::Rgb(40, 40, 40);
+/// Active border
+const BORDER_ACTIVE: Color = GREEN;
 
 // ── Main Render Function ────────────────────────────────────────────────────
 
@@ -72,10 +63,6 @@ const BORDER_ACTIVE: Color = CYAN;
 pub fn render(frame: &mut Frame, app: &AppState) {
     let area = frame.area();
 
-    // Main vertical layout:
-    //   [1] Header bar (3 lines — border + text + border)
-    //   [2] Middle content (file queue + log side by side)
-    //   [3] Bottom panel (progress + sparkline + keybinds)
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -97,26 +84,29 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
     let status_text = app.status.to_string();
 
     let mut spans = vec![
-        Span::styled("  FileDrop ", Style::default().fg(CYAN).bold()),
+        Span::styled("  [", Style::default().fg(MUTED)),
+        Span::styled(
+            "FILEDROP",
+            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("] ", Style::default().fg(MUTED)),
         Span::styled("v0.1 ", Style::default().fg(TEXT_DIM)),
-        Span::styled(" [", Style::default().fg(DARK_GRAY)),
+        Span::styled(" :: ", Style::default().fg(MUTED)),
         Span::styled(
             mode_text,
-            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
         ),
-        Span::styled("] ", Style::default().fg(DARK_GRAY)),
-        Span::styled("  ", Style::default()),
-        Span::styled(status_text, Style::default().fg(TEXT_PRIMARY)),
+        Span::styled(" :: ", Style::default().fg(MUTED)),
+        Span::styled(status_text, Style::default().fg(GREEN_BRIGHT)),
     ];
 
     // Show phone URL in header if available (receive mode)
     if let Some(ref url) = app.phone_url {
-        spans.push(Span::styled("  │  ", Style::default().fg(DARK_GRAY)));
-        spans.push(Span::styled("📱 ", Style::default()));
+        spans.push(Span::styled("  |  ", Style::default().fg(MUTED)));
         spans.push(Span::styled(
             url.clone(),
             Style::default()
-                .fg(SUCCESS_GREEN)
+                .fg(GREEN)
                 .add_modifier(Modifier::BOLD),
         ));
     }
@@ -136,7 +126,6 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
 // ── Middle Content (File Queue + Transfer Log) ──────────────────────────────
 
 fn render_middle(frame: &mut Frame, area: Rect, app: &AppState) {
-    // Horizontal split: 40% file queue, 60% transfer log
     let middle_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
@@ -154,13 +143,13 @@ fn render_file_queue(frame: &mut Frame, area: Rect, app: &AppState) {
         .map(|(_i, file)| {
             let (prefix, style) = match &file.status {
                 TransferStatus::InProgress => (
-                    "▶ ",
-                    Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+                    "> ",
+                    Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
                 ),
                 TransferStatus::Completed => (
                     "✓ ",
                     Style::default()
-                        .fg(SUCCESS_GREEN)
+                        .fg(GREEN_DIM)
                         .add_modifier(Modifier::DIM),
                 ),
                 TransferStatus::Failed(_) => (
@@ -171,7 +160,7 @@ fn render_file_queue(frame: &mut Frame, area: Rect, app: &AppState) {
                 ),
                 TransferStatus::Queued => ("  ", Style::default().fg(TEXT_DIM)),
                 TransferStatus::Cancelled => (
-                    "⊘ ",
+                    "- ",
                     Style::default()
                         .fg(WARNING_AMBER)
                         .add_modifier(Modifier::DIM),
@@ -190,21 +179,20 @@ fn render_file_queue(frame: &mut Frame, area: Rect, app: &AppState) {
                 Span::styled(&file.name, style),
                 Span::styled("  ", Style::default()),
                 Span::styled(size, Style::default().fg(MUTED)),
-                Span::styled(progress_str, Style::default().fg(CYAN)),
+                Span::styled(progress_str, Style::default().fg(GREEN)),
             ]);
 
             ListItem::new(line)
         })
         .collect();
 
-    // Show placeholder if empty
     let list = if items.is_empty() {
         let empty_items = vec![
             ListItem::new(Line::from(vec![
-                Span::styled("  No files in queue", Style::default().fg(TEXT_DIM)),
+                Span::styled("  // No targets in queue", Style::default().fg(TEXT_DIM)),
             ])),
             ListItem::new(Line::from(vec![Span::styled(
-                "  Waiting for transfer...",
+                "  // Awaiting incoming stream...",
                 Style::default().fg(MUTED),
             )])),
         ];
@@ -215,8 +203,8 @@ fn render_file_queue(frame: &mut Frame, area: Rect, app: &AppState) {
 
     let block = Block::default()
         .title(Span::styled(
-            " FILE QUEUE ",
-            Style::default().fg(CYAN).bold(),
+            " [ TRANSFER QUEUE ] ",
+            Style::default().fg(GREEN).bold(),
         ))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(BORDER));
@@ -230,11 +218,11 @@ fn render_transfer_log(frame: &mut Frame, area: Rect, app: &AppState) {
         .log_entries
         .iter()
         .map(|entry| {
-            let (msg_color, prefix_icon) = match entry.level {
+            let (msg_color, prefix) = match entry.level {
                 LogLevel::Info => (TEXT_PRIMARY, ""),
-                LogLevel::Success => (SUCCESS_GREEN, "✓ "),
-                LogLevel::Warning => (WARNING_AMBER, "⚠ "),
-                LogLevel::Error => (ERROR_RED, "✗ "),
+                LogLevel::Success => (GREEN, "OK: "),
+                LogLevel::Warning => (WARNING_AMBER, "WARN: "),
+                LogLevel::Error => (ERROR_RED, "ERR: "),
             };
 
             let line = Line::from(vec![
@@ -242,7 +230,7 @@ fn render_transfer_log(frame: &mut Frame, area: Rect, app: &AppState) {
                     format!("  [{}] ", entry.timestamp),
                     Style::default().fg(MUTED),
                 ),
-                Span::styled(prefix_icon, Style::default().fg(msg_color)),
+                Span::styled(prefix, Style::default().fg(msg_color).bold()),
                 Span::styled(&entry.message, Style::default().fg(msg_color)),
             ]);
 
@@ -250,10 +238,9 @@ fn render_transfer_log(frame: &mut Frame, area: Rect, app: &AppState) {
         })
         .collect();
 
-    // Show placeholder if empty
     let list = if items.is_empty() {
         List::new(vec![ListItem::new(Line::from(vec![Span::styled(
-            "  No log entries yet",
+            "  // Waiting for events...",
             Style::default().fg(TEXT_DIM),
         )]))])
     } else {
@@ -262,8 +249,8 @@ fn render_transfer_log(frame: &mut Frame, area: Rect, app: &AppState) {
 
     let block = Block::default()
         .title(Span::styled(
-            " TRANSFER LOG ",
-            Style::default().fg(CYAN).bold(),
+            " [ SYSTEM LOG ] ",
+            Style::default().fg(GREEN).bold(),
         ))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(BORDER));
@@ -305,7 +292,7 @@ fn render_progress_bar(frame: &mut Frame, area: Rect, app: &AppState) {
         .block(Block::default())
         .gauge_style(
             Style::default()
-                .fg(CYAN)
+                .fg(GREEN)
                 .bg(DARK_GRAY)
                 .add_modifier(Modifier::BOLD),
         )
@@ -316,7 +303,6 @@ fn render_progress_bar(frame: &mut Frame, area: Rect, app: &AppState) {
 }
 
 fn render_sparkline(frame: &mut Frame, area: Rect, app: &AppState) {
-    // Normalize speed history to fit sparkline height
     let max_speed = app.speed_history.iter().copied().max().unwrap_or(1).max(1);
 
     let sparkline = Sparkline::default()
@@ -326,7 +312,7 @@ fn render_sparkline(frame: &mut Frame, area: Rect, app: &AppState) {
         )))
         .data(&app.speed_history)
         .max(max_speed)
-        .style(Style::default().fg(CYAN));
+        .style(Style::default().fg(GREEN));
 
     frame.render_widget(sparkline, area);
 }
@@ -334,13 +320,13 @@ fn render_sparkline(frame: &mut Frame, area: Rect, app: &AppState) {
 fn render_keybinds(frame: &mut Frame, area: Rect, _app: &AppState) {
     let keybinds = Line::from(vec![
         Span::styled("  ", Style::default()),
-        Span::styled("Ctrl+C", Style::default().fg(CYAN).bold()),
-        Span::styled(" cancel  │  ", Style::default().fg(TEXT_DIM)),
-        Span::styled("Q", Style::default().fg(CYAN).bold()),
-        Span::styled(" quit  │  ", Style::default().fg(TEXT_DIM)),
-        Span::styled("↑↓", Style::default().fg(CYAN).bold()),
-        Span::styled(" scroll queue  │  ", Style::default().fg(TEXT_DIM)),
-        Span::styled("PgUp/PgDn", Style::default().fg(CYAN).bold()),
+        Span::styled("[CTRL+C]", Style::default().fg(GREEN).bold()),
+        Span::styled(" abort  ", Style::default().fg(TEXT_DIM)),
+        Span::styled("[Q]", Style::default().fg(GREEN).bold()),
+        Span::styled(" exit  ", Style::default().fg(TEXT_DIM)),
+        Span::styled("[↑↓]", Style::default().fg(GREEN).bold()),
+        Span::styled(" scroll queue  ", Style::default().fg(TEXT_DIM)),
+        Span::styled("[PgUp/Dn]", Style::default().fg(GREEN).bold()),
         Span::styled(" scroll log", Style::default().fg(TEXT_DIM)),
     ]);
 
