@@ -12,6 +12,7 @@ mod sync;
 mod transfer;
 mod tui;
 mod web;
+mod installer;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -138,10 +139,13 @@ async fn main() -> anyhow::Result<()> {
     } else {
         // No command provided (e.g. double-clicked the executable)
         // Show the interactive main menu
-        if let Some(cmd) = tui::main_menu::run_main_menu().await? {
-            cmd
-        } else {
-            return Ok(()); // User exited the menu
+        match tui::main_menu::run_main_menu().await? {
+            tui::main_menu::MenuAction::RunCommand(cmd) => cmd,
+            tui::main_menu::MenuAction::Install => {
+                installer::install_self()?;
+                return Ok(());
+            }
+            tui::main_menu::MenuAction::Exit => return Ok(()),
         }
     };
 

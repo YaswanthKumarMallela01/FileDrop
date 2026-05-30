@@ -4,14 +4,20 @@ use crossterm::{
     event::{self, Event, KeyCode},
     execute,
     style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::io::{stdout, Write};
 
-pub async fn run_main_menu() -> anyhow::Result<Option<Commands>> {
+pub enum MenuAction {
+    RunCommand(Commands),
+    Install,
+    Exit,
+}
+
+pub async fn run_main_menu() -> anyhow::Result<MenuAction> {
     let mut stdout = stdout();
     enable_raw_mode()?;
-    execute!(stdout, Hide)?;
+    execute!(stdout, EnterAlternateScreen, Hide)?;
 
     let options = [
         "Receive Files (From Phone)",
@@ -19,6 +25,7 @@ pub async fn run_main_menu() -> anyhow::Result<Option<Commands>> {
         "Pair New Device",
         "List Paired Devices",
         "Setup Hotspot (Direct Connection)",
+        "Install FileDrop (Add to System PATH)",
         "Exit",
     ];
 
@@ -89,24 +96,25 @@ pub async fn run_main_menu() -> anyhow::Result<Option<Commands>> {
     }
 
     disable_raw_mode()?;
-    execute!(stdout, Show, Clear(ClearType::All), MoveTo(0, 0))?;
+    execute!(stdout, Show, LeaveAlternateScreen)?;
 
     match selected {
-        0 => Ok(Some(Commands::Receive {
+        0 => Ok(MenuAction::RunCommand(Commands::Receive {
             mode: None,
             multi: false,
             encrypt: false,
         })),
-        1 => Ok(Some(Commands::Share {
+        1 => Ok(MenuAction::RunCommand(Commands::Share {
             path: None,
             expires: None,
             once: false,
             pin: None,
             mode: None,
         })),
-        2 => Ok(Some(Commands::Pair)),
-        3 => Ok(Some(Commands::Peers)),
-        4 => Ok(Some(Commands::Hotspot { auto: false })),
-        _ => Ok(None),
+        2 => Ok(MenuAction::RunCommand(Commands::Pair)),
+        3 => Ok(MenuAction::RunCommand(Commands::Peers)),
+        4 => Ok(MenuAction::RunCommand(Commands::Hotspot { auto: false })),
+        5 => Ok(MenuAction::Install),
+        _ => Ok(MenuAction::Exit),
     }
 }
