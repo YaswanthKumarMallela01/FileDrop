@@ -4,3 +4,4 @@ pub mod app;
 pub mod events;
 pub mod ui;
 pub mod share_configurator;
+pub mod main_menu;

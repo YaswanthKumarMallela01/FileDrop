@@ -28,7 +28,7 @@ use std::path::PathBuf;
 )]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -133,7 +133,19 @@ async fn main() -> anyhow::Result<()> {
     // Ensure config directories exist
     config::ensure_directories()?;
 
-    match cli.command {
+    let command = if let Some(cmd) = cli.command {
+        cmd
+    } else {
+        // No command provided (e.g. double-clicked the executable)
+        // Show the interactive main menu
+        if let Some(cmd) = tui::main_menu::run_main_menu().await? {
+            cmd
+        } else {
+            return Ok(()); // User exited the menu
+        }
+    };
+
+    match command {
         Commands::Pair => {
             init_tracing();
             println!();
