@@ -34,6 +34,11 @@ pub struct Config {
     /// TUI color theme
     #[serde(default)]
     pub theme: ThemeConfig,
+
+    /// Last selected connection mode ("router" or "hotspot")
+    /// Persisted so the user can skip the mode selection prompt with 'S'
+    #[serde(default)]
+    pub last_connection_mode: Option<String>,
 }
 
 /// TUI theme configuration — colors pulled from Stitch design system
@@ -65,6 +70,7 @@ impl Default for Config {
             mdns_enabled: true,
             receive_dir: None,
             theme: ThemeConfig::default(),
+            last_connection_mode: None,
         }
     }
 }

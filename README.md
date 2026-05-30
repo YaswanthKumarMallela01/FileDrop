@@ -36,11 +36,23 @@
 
 ## 🚀 Quick Start
 
-### Install on Any Device (One Command)
+### Install on Any Device (No Rust Required)
+
+The easiest way to install FileDrop without installing Rust is to download the pre-compiled binary directly from the GitHub Releases page:
+
+**Windows (PowerShell):**
+```powershell
+Invoke-WebRequest -Uri "https://github.com/YaswanthKumarMallela01/FileDrop/releases/latest/download/filedrop-windows.exe" -OutFile "filedrop.exe"
+# Move filedrop.exe to a folder in your PATH
+```
+
+*(Note: You'll need to set up GitHub Actions to auto-build these releases for this to work out-of-the-box!)*
+
+### Install via Cargo (Requires Rust)
+
+If you already have Rust installed, you can compile and install it globally with one command:
 
 ```bash
-# Prerequisites: Rust toolchain (https://rustup.rs)
-# Then run:
 cargo install --git https://github.com/YaswanthKumarMallela01/FileDrop.git
 ```
 
@@ -81,20 +93,27 @@ A **QR code** appears in your terminal and **stays until you press Enter**.
 ## 🛠️ All Commands
 
 ```
-filedrop receive     Start server + QR code + TUI, save files to current directory
+filedrop receive     Start server to receive files into the current directory
+filedrop share       Open an interactive TUI to select files to share via an ephemeral link (with PIN/expiry)
+filedrop sync        Sync a folder in real-time across devices
 filedrop send <path> Send file/directory to a discovered peer
 filedrop pair        Generate QR code for certificate pairing
 filedrop peers       List all paired devices
 filedrop unpair <n>  Remove a paired device
+filedrop hotspot     Interactive guide to set up a direct Hotspot connection
 filedrop demo        Visual TUI test with simulated transfers
 filedrop --help      Show all commands
 ```
 
 ### TUI Keyboard Controls
 
+FileDrop features an interactive v2 Terminal UI (TUI) for receiving and sharing files.
+
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` / `j` / `k` | Scroll file queue |
+| `↑` / `↓` / `j` / `k` | Scroll logs, or navigate files in the share configurator |
+| `Space` / `Enter` | Select/toggle files for sharing |
+| `Tab` | Switch input fields (PIN, expiry, etc.) |
 | `PgUp` / `PgDn` | Scroll system log (10 lines at a time) |
 | `H` / `Home` | Jump to top of queue |
 | `E` / `End` | Jump to bottom of queue |

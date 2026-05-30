@@ -1,6 +1,6 @@
 [package]
 name = "filedrop"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Secure, fast, local Wi-Fi file transfer between laptop and phone"
 authors = ["FileDrop Team"]
@@ -67,6 +67,24 @@ directories = "6"
 uuid = { version = "1", features = ["v4"] }
 futures = "0.3"
 futures-util = "0.3"
+tokio-util = { version = "0.7", features = ["io"] }
+
+# Feature 2C: On-the-fly folder zipping
+zip = "2"
+
+# Feature 4: Ephemeral share token generation
+rand = "0.8"
+
+# Feature 5: File system watcher for sync
+notify = "6"
+
+# Feature 6: PWA icon generation
+image = "0.25"
+
+# Feature 7: E2E encryption (ECDH + AES-256-GCM)
+p256 = { version = "0.13", features = ["ecdh"] }
+aes-gcm = "0.10"
+hkdf = "0.12"
 
 [profile.release]
 opt-level = 3

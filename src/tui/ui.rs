@@ -1,7 +1,7 @@
 //! TUI rendering — Hacker-themed Ratatui widget composition.
 //!
 //! ╔═══════════════════════════════════════════════════╗
-//! ║  [FILEDROP] v0.1  ::  RECEIVE_MODE  ::  ONLINE   ║
+//! ║  [FILEDROP] v0.2.0  ::  RECEIVE_MODE  ::  ONLINE   ║
 //! ╠═════════════════════╤═════════════════════════════╣
 //! ║  [ TRANSFER QUEUE ] │  [ SYSTEM LOG ]             ║
 //! ║  ─────────────────  │  ───────────────            ║
@@ -24,7 +24,7 @@ use ratatui::{
 
 use crate::transfer::protocol::{self, TransferStatus};
 
-use super::app::{AppState, LogLevel};
+use super::app::{AppState, FocusPane, LogLevel};
 
 // ── Hacker Theme Colors ─────────────────────────────────────────────────────
 
@@ -52,6 +52,8 @@ const BORDER: Color = Color::Rgb(40, 40, 40);
 const BORDER_ACTIVE: Color = GREEN;
 /// Selected/highlighted item background
 const HIGHLIGHT_BG: Color = Color::Rgb(20, 40, 20);
+/// Cyan accent for special badges
+const CYAN: Color = Color::Rgb(0, 212, 255);
 
 // ── Main Render Function ────────────────────────────────────────────────────
 
@@ -86,7 +88,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
             Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
         ),
         Span::styled("] ", Style::default().fg(MUTED)),
-        Span::styled("v0.1 ", Style::default().fg(TEXT_DIM)),
+        Span::styled("v0.2.0 ", Style::default().fg(TEXT_DIM)),
         Span::styled(" :: ", Style::default().fg(MUTED)),
         Span::styled(
             mode_text,
@@ -107,6 +109,30 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
         ));
     }
 
+    // Feature 3: Hotspot mode badge
+    if app.hotspot_mode {
+        spans.push(Span::styled("  ", Style::default()));
+        spans.push(Span::styled(
+            " HOTSPOT ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(WARNING_AMBER)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    // Feature 7: Encryption badge
+    if app.encrypt_enabled {
+        spans.push(Span::styled("  ", Style::default()));
+        spans.push(Span::styled(
+            " 🔒 E2E ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(CYAN)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
     let header_line = Line::from(spans);
 
     let header = Paragraph::new(header_line).block(
@@ -119,16 +145,33 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
     frame.render_widget(header, area);
 }
 
-// ── Middle Content (File Queue + Transfer Log) ──────────────────────────────
+// ── Middle Content (File Queue + Log + File Browser) ────────────────────────
 
 fn render_middle(frame: &mut Frame, area: Rect, app: &AppState) {
-    let middle_layout = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-        .split(area);
+    if app.file_browser.is_some() {
+        // Three-pane layout: Queue | Log | File Browser
+        let middle_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(30),
+                Constraint::Percentage(40),
+                Constraint::Percentage(30),
+            ])
+            .split(area);
 
-    render_file_queue(frame, middle_layout[0], app);
-    render_transfer_log(frame, middle_layout[1], app);
+        render_file_queue(frame, middle_layout[0], app);
+        render_transfer_log(frame, middle_layout[1], app);
+        render_file_browser(frame, middle_layout[2], app);
+    } else {
+        // Two-pane layout: Queue | Log
+        let middle_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+            .split(area);
+
+        render_file_queue(frame, middle_layout[0], app);
+        render_transfer_log(frame, middle_layout[1], app);
+    }
 }
 
 fn render_file_queue(frame: &mut Frame, area: Rect, app: &AppState) {
@@ -229,13 +272,14 @@ fn render_file_queue(frame: &mut Frame, area: Rect, app: &AppState) {
         " [ TRANSFER QUEUE ] ".to_string()
     };
 
+    let is_focused = app.focus == FocusPane::TransferQueue;
     let block = Block::default()
         .title(Span::styled(
             scroll_indicator,
             Style::default().fg(GREEN).bold(),
         ))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(BORDER));
+        .border_style(Style::default().fg(if is_focused { BORDER_ACTIVE } else { BORDER }));
 
     let list = list.block(block);
     frame.render_widget(list, area);
@@ -306,6 +350,108 @@ fn render_transfer_log(frame: &mut Frame, area: Rect, app: &AppState) {
         ))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(BORDER));
+
+    let list = list.block(block);
+    frame.render_widget(list, area);
+}
+
+// ── File Browser Pane (Feature 2A) ──────────────────────────────────────────
+
+fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
+    let fb = match &app.file_browser {
+        Some(fb) => fb,
+        None => return,
+    };
+
+    let inner_height = area.height.saturating_sub(3) as usize; // borders + title
+
+    let items: Vec<ListItem> = fb
+        .entries
+        .iter()
+        .enumerate()
+        .map(|(i, entry)| {
+            let is_cursor = i == fb.cursor;
+            let is_selected = fb.selected.contains(&i);
+
+            let icon = if entry.is_dir { "📁 " } else { "📄 " };
+            let select_mark = if is_selected { "● " } else { "  " };
+
+            let name_style = if is_cursor {
+                Style::default().fg(GREEN_BRIGHT).bg(HIGHLIGHT_BG).add_modifier(Modifier::BOLD)
+            } else if is_selected {
+                Style::default().fg(GREEN)
+            } else if entry.is_dir {
+                Style::default().fg(CYAN)
+            } else {
+                Style::default().fg(TEXT_PRIMARY)
+            };
+
+            let size_text = if entry.is_dir {
+                String::new()
+            } else {
+                protocol::format_bytes(entry.size)
+            };
+
+            let line = Line::from(vec![
+                Span::styled(
+                    if is_cursor { ">" } else { " " },
+                    Style::default().fg(GREEN),
+                ),
+                Span::styled(select_mark, Style::default().fg(GREEN)),
+                Span::styled(icon, Style::default()),
+                Span::styled(&entry.name, name_style),
+                Span::styled("  ", Style::default()),
+                Span::styled(size_text, Style::default().fg(MUTED)),
+            ]);
+
+            ListItem::new(line)
+        })
+        .collect();
+
+    // Viewport scrolling
+    let total = items.len();
+    let start = if total > inner_height {
+        if fb.cursor < inner_height / 2 {
+            0
+        } else if fb.cursor + inner_height / 2 >= total {
+            total.saturating_sub(inner_height)
+        } else {
+            fb.cursor.saturating_sub(inner_height / 2)
+        }
+    } else {
+        0
+    };
+    let visible: Vec<ListItem> = items.into_iter().skip(start).take(inner_height).collect();
+
+    let list = if visible.is_empty() {
+        List::new(vec![ListItem::new(Line::from(vec![Span::styled(
+            "  // Empty directory",
+            Style::default().fg(TEXT_DIM),
+        )]))])
+    } else {
+        List::new(visible)
+    };
+
+    // Build title with path + selection count
+    let path_display = fb.current_path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| fb.current_path.display().to_string());
+
+    let title = if fb.selected_count() > 0 {
+        format!(" [ {} ] ({} sel, {}) ",
+            path_display,
+            fb.selected_count(),
+            protocol::format_bytes(fb.selected_size()),
+        )
+    } else {
+        format!(" [ {} ] ", path_display)
+    };
+
+    let is_focused = app.focus == FocusPane::FileBrowser;
+    let block = Block::default()
+        .title(Span::styled(title, Style::default().fg(if is_focused { GREEN } else { TEXT_DIM }).bold()))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(if is_focused { BORDER_ACTIVE } else { BORDER }));
 
     let list = list.block(block);
     frame.render_widget(list, area);
@@ -414,22 +560,32 @@ fn render_sparkline(frame: &mut Frame, area: Rect, app: &AppState) {
     frame.render_widget(sparkline, area);
 }
 
-fn render_keybinds(frame: &mut Frame, area: Rect, _app: &AppState) {
-    let keybinds = Line::from(vec![
+fn render_keybinds(frame: &mut Frame, area: Rect, app: &AppState) {
+    let mut keybind_spans = vec![
         Span::styled("  ", Style::default()),
         Span::styled("[CTRL+C]", Style::default().fg(GREEN).bold()),
         Span::styled(" abort  ", Style::default().fg(TEXT_DIM)),
         Span::styled("[Q]", Style::default().fg(GREEN).bold()),
         Span::styled(" exit  ", Style::default().fg(TEXT_DIM)),
         Span::styled("[↑↓/jk]", Style::default().fg(GREEN).bold()),
-        Span::styled(" scroll queue  ", Style::default().fg(TEXT_DIM)),
+        Span::styled(" scroll  ", Style::default().fg(TEXT_DIM)),
         Span::styled("[PgUp/Dn]", Style::default().fg(GREEN).bold()),
-        Span::styled(" scroll log  ", Style::default().fg(TEXT_DIM)),
-        Span::styled("[H]", Style::default().fg(GREEN).bold()),
-        Span::styled(" home  ", Style::default().fg(TEXT_DIM)),
-        Span::styled("[E]", Style::default().fg(GREEN).bold()),
-        Span::styled(" end", Style::default().fg(TEXT_DIM)),
-    ]);
+        Span::styled(" log  ", Style::default().fg(TEXT_DIM)),
+    ];
+
+    // Add file browser keybinds if browser is active (Feature 2A)
+    if app.file_browser.is_some() {
+        keybind_spans.extend_from_slice(&[
+            Span::styled("[Tab]", Style::default().fg(CYAN).bold()),
+            Span::styled(" focus  ", Style::default().fg(TEXT_DIM)),
+            Span::styled("[Space]", Style::default().fg(CYAN).bold()),
+            Span::styled(" sel  ", Style::default().fg(TEXT_DIM)),
+            Span::styled("[S]", Style::default().fg(CYAN).bold()),
+            Span::styled(" send", Style::default().fg(TEXT_DIM)),
+        ]);
+    }
+
+    let keybinds = Line::from(keybind_spans);
 
     let paragraph = Paragraph::new(keybinds).block(
         Block::default()
@@ -438,4 +594,211 @@ fn render_keybinds(frame: &mut Frame, area: Rect, _app: &AppState) {
     );
 
     frame.render_widget(paragraph, area);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Feature 3A: Connection Mode Selection Screen
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Render the connection mode selection fullscreen
+pub fn render_mode_selection(frame: &mut Frame, selected: usize) {
+    let area = frame.area();
+
+    // Center the content vertically
+    let v_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(3),
+            Constraint::Length(16),
+            Constraint::Min(3),
+        ])
+        .split(area);
+
+    // Center horizontally
+    let h_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Min(5),
+            Constraint::Length(60),
+            Constraint::Min(5),
+        ])
+        .split(v_layout[1]);
+
+    let content_area = h_layout[1];
+
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled("  [", Style::default().fg(MUTED)),
+            Span::styled("FILEDROP", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled("]  ", Style::default().fg(MUTED)),
+            Span::styled("Connection Setup", Style::default().fg(TEXT_PRIMARY)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  How are your devices connected?",
+            Style::default().fg(TEXT_PRIMARY).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+    ];
+
+    // Option 1: Router
+    let r_prefix = if selected == 0 { " ▶ " } else { "   " };
+    let r_style = if selected == 0 {
+        Style::default().fg(GREEN_BRIGHT).bg(HIGHLIGHT_BG).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(TEXT_PRIMARY)
+    };
+    lines.push(Line::from(vec![
+        Span::styled(r_prefix, Style::default().fg(GREEN)),
+        Span::styled("[1]", Style::default().fg(GREEN).bold()),
+        Span::styled("  Router / Same Wi-Fi", r_style),
+    ]));
+    lines.push(Line::from(Span::styled(
+        "       Both devices on the same local network",
+        Style::default().fg(TEXT_DIM),
+    )));
+    lines.push(Line::from(""));
+
+    // Option 2: Hotspot
+    let h_prefix = if selected == 1 { " ▶ " } else { "   " };
+    let h_style = if selected == 1 {
+        Style::default().fg(GREEN_BRIGHT).bg(HIGHLIGHT_BG).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(TEXT_PRIMARY)
+    };
+    lines.push(Line::from(vec![
+        Span::styled(h_prefix, Style::default().fg(GREEN)),
+        Span::styled("[2]", Style::default().fg(GREEN).bold()),
+        Span::styled("  Hotspot / Direct", h_style),
+    ]));
+    lines.push(Line::from(Span::styled(
+        "       Create a direct Wi-Fi connection (no router)",
+        Style::default().fg(TEXT_DIM),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(""));
+
+    // Keybinds
+    lines.push(Line::from(vec![
+        Span::styled("  ", Style::default()),
+        Span::styled("[1/2]", Style::default().fg(GREEN).bold()),
+        Span::styled(" select  ", Style::default().fg(TEXT_DIM)),
+        Span::styled("[Enter]", Style::default().fg(GREEN).bold()),
+        Span::styled(" confirm  ", Style::default().fg(TEXT_DIM)),
+        Span::styled("[S]", Style::default().fg(GREEN).bold()),
+        Span::styled(" use last  ", Style::default().fg(TEXT_DIM)),
+        Span::styled("[Q]", Style::default().fg(GREEN).bold()),
+        Span::styled(" quit", Style::default().fg(TEXT_DIM)),
+    ]));
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(BORDER_ACTIVE))
+        .title(Span::styled(
+            " [ CONNECTION MODE ] ",
+            Style::default().fg(GREEN).bold(),
+        ));
+
+    let paragraph = Paragraph::new(lines).block(block);
+    frame.render_widget(paragraph, content_area);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Feature 3C: Hotspot Setup Guide Screen
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Render the hotspot setup guide fullscreen
+pub fn render_hotspot_guide(frame: &mut Frame, os: &str) {
+    let area = frame.area();
+
+    let v_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(2),
+            Constraint::Length(22),
+            Constraint::Min(2),
+        ])
+        .split(area);
+
+    let h_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Min(5),
+            Constraint::Length(70),
+            Constraint::Min(5),
+        ])
+        .split(v_layout[1]);
+
+    let content_area = h_layout[1];
+
+    let instructions = crate::hotspot::hotspot_instructions(os);
+
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled("  [", Style::default().fg(MUTED)),
+            Span::styled("FILEDROP", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled("]  ", Style::default().fg(MUTED)),
+            Span::styled("Hotspot Setup Guide", Style::default().fg(WARNING_AMBER).bold()),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Detected OS: ", Style::default().fg(TEXT_DIM)),
+            Span::styled(os, Style::default().fg(GREEN_BRIGHT).bold()),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Follow these steps on your laptop:",
+            Style::default().fg(TEXT_PRIMARY).bold(),
+        )),
+        Line::from(""),
+    ];
+
+    for (i, instruction) in instructions.iter().enumerate() {
+        lines.push(Line::from(vec![
+            Span::styled(format!("  {}. ", i + 1), Style::default().fg(GREEN).bold()),
+            Span::styled(instruction.as_str(), Style::default().fg(TEXT_PRIMARY)),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  Then connect your phone to the hotspot Wi-Fi.",
+        Style::default().fg(WARNING_AMBER),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(""));
+
+    // Keybinds
+    let mut keybind_spans = vec![
+        Span::styled("  ", Style::default()),
+        Span::styled("[Y]", Style::default().fg(GREEN).bold()),
+        Span::styled(" done, continue  ", Style::default().fg(TEXT_DIM)),
+        Span::styled("[B]", Style::default().fg(GREEN).bold()),
+        Span::styled(" go back  ", Style::default().fg(TEXT_DIM)),
+    ];
+
+    if os == "linux" {
+        keybind_spans.extend_from_slice(&[
+            Span::styled("[A]", Style::default().fg(CYAN).bold()),
+            Span::styled(" auto-setup  ", Style::default().fg(TEXT_DIM)),
+        ]);
+    }
+
+    keybind_spans.extend_from_slice(&[
+        Span::styled("[Q]", Style::default().fg(GREEN).bold()),
+        Span::styled(" quit", Style::default().fg(TEXT_DIM)),
+    ]);
+
+    lines.push(Line::from(keybind_spans));
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(WARNING_AMBER))
+        .title(Span::styled(
+            " [ HOTSPOT SETUP ] ",
+            Style::default().fg(WARNING_AMBER).bold(),
+        ));
+
+    let paragraph = Paragraph::new(lines).block(block);
+    frame.render_widget(paragraph, content_area);
 }

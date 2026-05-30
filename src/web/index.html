@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#0a0a0a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/favicon.ico">
 <title>FileDrop // SECURE TRANSFER</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
@@ -525,6 +527,87 @@
     z-index: 1;
   }
 
+  /* ── PWA Install Button ──────────────────────────── */
+  .install-btn {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: transparent;
+    color: var(--cyan);
+    border: 1px solid var(--cyan);
+    font-family: var(--font);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+  }
+
+  .install-btn:hover {
+    background: var(--cyan);
+    color: #000;
+  }
+
+  .install-btn.visible { display: inline-flex; }
+
+  /* ── Receive Section (laptop → phone) ─────────────── */
+  .receive-section { display: none; }
+  .receive-section.visible { display: block; }
+
+  .receive-card {
+    background: var(--surface);
+    border: 1px solid var(--cyan);
+    padding: 14px;
+    margin-bottom: 8px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .receive-card .file-name { color: var(--cyan); }
+
+  .receive-card .file-progress-fill {
+    background: var(--cyan);
+    box-shadow: 0 0 6px rgba(0,212,255,0.3);
+  }
+
+  .receive-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(0,212,255,0.1);
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .save-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 8px 16px;
+    background: transparent;
+    color: var(--cyan);
+    border: 1px solid var(--cyan);
+    font-family: var(--font);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .save-btn:hover {
+    background: var(--cyan);
+    color: #000;
+  }
+
   /* ── Scrollbar ────────────────────────────────────── */
   ::-webkit-scrollbar { width: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -542,11 +625,14 @@
     <span class="logo-bracket">[</span>
     <span class="logo-text">FileDrop</span>
     <span class="logo-bracket">]</span>
-    <span class="logo-ver">v0.1.0</span>
+    <span class="logo-ver">v0.2.0</span>
   </div>
-  <div id="statusPill" class="status-pill connecting">
-    <div class="status-dot"></div>
-    <span id="statusText">Link...</span>
+  <div style="display:flex;align-items:center;gap:8px">
+    <button id="installBtn" class="install-btn" onclick="installPWA()">⬇ Install</button>
+    <div id="statusPill" class="status-pill connecting">
+      <div class="status-dot"></div>
+      <span id="statusText">Link...</span>
+    </div>
   </div>
 </div>
 
@@ -600,10 +686,17 @@
     </div>
     <div id="logContainer" class="log-container"></div>
   </div>
+
+  <div id="receiveSection" class="receive-section">
+    <div class="section-header">
+      <span class="section-title">Incoming from Laptop</span>
+    </div>
+    <div id="receiveList"></div>
+  </div>
 </div>
 
 <div class="footer">
-  FileDrop v0.1.0 // encrypted local transfer // no cloud // no trace
+  FileDrop v0.2.0 // encrypted local transfer // no cloud // no trace
 </div>
 
 <script>
@@ -674,10 +767,20 @@ function connect() {
   };
 
   ws.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      handleServerMessage(msg);
-    } catch (e) {}
+    if (typeof event.data === 'string') {
+      try {
+        const msg = JSON.parse(event.data);
+        handleServerMessage(msg);
+      } catch (e) {}
+    } else if (event.data instanceof ArrayBuffer) {
+      // Binary data: push chunk from laptop or unexpected
+      if (activePush) {
+        const bytes = new Uint8Array(event.data);
+        pushChunks.push(bytes);
+        activePush.received += bytes.length;
+        updateReceiveProgress(activePush);
+      }
+    }
   };
 }
 
@@ -1020,8 +1123,129 @@ function formatTime(s) {
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// ── Laptop → Phone Push Handling ──────────────────────────
+
+let activePush = null;
+let pushChunks = [];
+
+function handleServerMessage(msg) {
+  if (msg.type === 'file_ack') {
+    if (msg.success) log('[ACK] File verified by target', 'success');
+    else log(`[NAK] Rejected: ${msg.error || 'unknown'}`, 'error');
+  }
+  // Handle push from laptop
+  else if (msg.type === 'push_start') {
+    activePush = { name: msg.name, size: msg.size, transfer_id: msg.transfer_id, received: 0 };
+    pushChunks = [];
+    showReceiveSection();
+    addReceiveCard(activePush);
+    log(`[RX] Incoming push: ${msg.name} (${formatBytes(msg.size)})`, 'info');
+  }
+  else if (msg.type === 'push_done') {
+    if (activePush) {
+      completeReceive(activePush, pushChunks);
+      log(`[OK] Received ${activePush.name} from laptop`, 'success');
+      activePush = null;
+      pushChunks = [];
+    }
+  }
+}
+
+function showReceiveSection() {
+  document.getElementById('receiveSection').classList.add('visible');
+}
+
+function addReceiveCard(push) {
+  const list = document.getElementById('receiveList');
+  const card = document.createElement('div');
+  card.className = 'receive-card';
+  card.id = `push-${push.transfer_id}`;
+  card.innerHTML = `
+    <div class="receive-badge">⬇ FROM LAPTOP</div>
+    <div class="file-info">
+      <div class="file-name"><span>${escapeHtml(push.name)}</span></div>
+      <span class="file-size">${formatBytes(push.size)}</span>
+    </div>
+    <div class="file-progress-bar">
+      <div class="file-progress-fill" id="pushProg-${push.transfer_id}" style="width:0%"></div>
+    </div>
+    <div class="file-status sending" id="pushStatus-${push.transfer_id}">RECEIVING...</div>
+  `;
+  list.appendChild(card);
+}
+
+function updateReceiveProgress(push) {
+  const pct = push.size > 0 ? (push.received / push.size * 100).toFixed(0) : 0;
+  const progEl = document.getElementById(`pushProg-${push.transfer_id}`);
+  const statEl = document.getElementById(`pushStatus-${push.transfer_id}`);
+  if (progEl) progEl.style.width = `${pct}%`;
+  if (statEl) statEl.textContent = `${pct}% // ${formatBytes(push.received)} / ${formatBytes(push.size)}`;
+}
+
+function completeReceive(push, chunks) {
+  const progEl = document.getElementById(`pushProg-${push.transfer_id}`);
+  const statEl = document.getElementById(`pushStatus-${push.transfer_id}`);
+  const card = document.getElementById(`push-${push.transfer_id}`);
+  if (progEl) progEl.style.width = '100%';
+  if (statEl) {
+    statEl.className = 'file-status done';
+    statEl.textContent = '✓ RECEIVED';
+  }
+  if (card) card.classList.add('completed');
+
+  // Combine chunks into a blob and create download link
+  const blob = new Blob(chunks, { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  if (card) {
+    const saveBtn = document.createElement('a');
+    saveBtn.className = 'save-btn';
+    saveBtn.href = url;
+    saveBtn.download = push.name;
+    saveBtn.textContent = '⬇ Save to Phone';
+    card.appendChild(saveBtn);
+  }
+
+  // Send ACK back to laptop
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'push_ack', success: true, transfer_id: push.transfer_id }));
+  }
+}
+
+// ── PWA Install ───────────────────────────────────────────
+
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBtn').classList.add('visible');
+});
+
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then((choice) => {
+    if (choice.outcome === 'accepted') {
+      log('[SYS] PWA installed ✓', 'success');
+      document.getElementById('installBtn').classList.remove('visible');
+    }
+    deferredPrompt = null;
+  });
+}
+
+// ── Service Worker Registration ───────────────────────────
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(() => {
+    console.log('[SW] Service worker registered');
+  }).catch(err => {
+    console.log('[SW] Registration failed:', err);
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────
 connect();
 </script>
 </body>
 </html>
+

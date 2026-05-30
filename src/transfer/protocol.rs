@@ -109,6 +109,44 @@ pub enum ControlMessage {
         /// Original timestamp echoed back
         timestamp: u64,
     },
+
+    // ── Feature 2B: Bidirectional Transfer (Laptop → Phone) ─────────
+
+    /// Announce a push transfer from laptop to phone
+    PushStart {
+        /// File name
+        name: String,
+        /// File size in bytes
+        size: u64,
+        /// SHA-256 hash ("streaming" if computed while sending)
+        sha256: String,
+        /// Unique transfer ID (UUID v4)
+        transfer_id: String,
+    },
+
+    /// Push transfer complete
+    PushDone {
+        /// Verification checksum in format "sha256:<hex>"
+        checksum: String,
+        /// Matching transfer ID
+        transfer_id: String,
+    },
+
+    /// Acknowledgment of a pushed file from phone
+    PushAck {
+        /// Whether the file was received successfully
+        success: bool,
+        /// Matching transfer ID
+        transfer_id: String,
+    },
+
+    // ── Feature 7: E2E Encryption Key Exchange ──────────────────────
+
+    /// ECDH public key exchange for E2E encryption
+    KeyExchange {
+        /// Base64-encoded ECDH public key (SEC1 uncompressed)
+        public_key: String,
+    },
 }
 
 /// Represents a file being transferred

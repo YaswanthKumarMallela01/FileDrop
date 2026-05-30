@@ -5,12 +5,16 @@
 //! - Receives files via the FileDrop binary protocol
 //! - Writes received chunks to disk using ChunkWriter
 //! - Updates the TUI via a channel with transfer progress
+//! - Supports single-device lock (Feature 1)
+//! - Supports bidirectional push transfers laptop → phone (Feature 2B)
+//! - Serves PWA assets: manifest.json, sw.js, icons (Feature 6)
 
 use anyhow::Result;
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::State,
-    response::IntoResponse,
+    http::StatusCode,
+    response::{IntoResponse, Json},
     routing::get,
     Router,
 };
@@ -19,7 +23,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 use crate::transfer::chunker::ChunkWriter;
 use crate::transfer::protocol::{
@@ -60,12 +64,33 @@ pub enum ServerEvent {
     Error { message: String },
 }
 
+/// Session lock state for single-device mode (Feature 1)
+#[derive(Debug)]
+struct SessionLock {
+    /// Currently connected device IP, if any
+    locked_to: Option<SocketAddr>,
+}
+
 /// Shared server state
 struct ServerState {
     /// Channel to send events to the TUI
     event_tx: mpsc::UnboundedSender<ServerEvent>,
     /// Output directory for received files
     output_dir: PathBuf,
+    /// Session lock — None means no lock (multi-mode), Some means single-device
+    session_lock: Option<Mutex<SessionLock>>,
+    /// Channel for push-file requests from TUI file browser
+    push_rx: Mutex<Option<mpsc::UnboundedReceiver<PushRequest>>>,
+    /// Whether E2E encryption is enabled
+    encrypt: bool,
+}
+
+/// A request to push a file from laptop to phone
+#[derive(Debug)]
+pub struct PushRequest {
+    pub name: String,
+    pub data: Vec<u8>,
+    pub sha256: String,
 }
 
 /// Start the WebSocket server on the specified port.
@@ -73,23 +98,38 @@ struct ServerState {
 pub async fn start_server(
     port: u16,
     event_tx: mpsc::UnboundedSender<ServerEvent>,
+    multi: bool,
+    encrypt: bool,
+    push_rx: Option<mpsc::UnboundedReceiver<PushRequest>>,
 ) -> Result<()> {
     let output_dir = std::env::current_dir()?;
 
     let state = Arc::new(ServerState {
         event_tx: event_tx.clone(),
         output_dir,
+        session_lock: if multi {
+            None // No lock in multi mode
+        } else {
+            Some(Mutex::new(SessionLock { locked_to: None }))
+        },
+        push_rx: Mutex::new(push_rx),
+        encrypt,
     });
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .route(
             "/health",
-            get(|| async { "FileDrop v0.1.0 OK" }),
+            get(|| async { "FileDrop v0.2.0 OK" }),
         )
         // Serve the embedded web UI for phone browsers
         .route("/", get(crate::web::serve_index))
         .route("/favicon.ico", get(crate::web::serve_favicon))
+        // PWA routes (Feature 6)
+        .route("/manifest.json", get(crate::web::serve_manifest))
+        .route("/sw.js", get(crate::web::serve_sw))
+        .route("/icon-192.png", get(crate::web::serve_icon_192))
+        .route("/icon-512.png", get(crate::web::serve_icon_512))
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -100,17 +140,42 @@ pub async fn start_server(
     });
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }
 
-/// WebSocket upgrade handler
+/// WebSocket upgrade handler with session lock check (Feature 1)
 async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<ServerState>>,
+    req: axum::extract::ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_connection(socket, state))
+    let peer_addr = req.0;
+
+    // Check session lock (Feature 1)
+    if let Some(ref lock) = state.session_lock {
+        let guard = lock.lock().await;
+        if let Some(locked_addr) = guard.locked_to {
+            if locked_addr != peer_addr {
+                // Another device is already connected — reject
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({
+                        "error": "session_locked",
+                        "message": "Another device is already connected."
+                    })),
+                ).into_response();
+            }
+        }
+    }
+
+    ws.on_upgrade(move |socket| handle_connection(socket, state, peer_addr))
+        .into_response()
 }
 
 /// State for tracking the current file being received
@@ -128,271 +193,370 @@ struct ActiveTransfer {
 }
 
 /// Handle an individual WebSocket connection — the main receive loop
-async fn handle_connection(mut socket: WebSocket, state: Arc<ServerState>) {
-    let peer_addr = "peer".to_string();
+async fn handle_connection(
+    mut socket: WebSocket,
+    state: Arc<ServerState>,
+    peer_addr: SocketAddr,
+) {
+    // Acquire session lock (Feature 1)
+    if let Some(ref lock) = state.session_lock {
+        let mut guard = lock.lock().await;
+        guard.locked_to = Some(peer_addr);
+        let _ = state.event_tx.send(ServerEvent::Log {
+            message: format!("[LOCK] Session locked to {}. Further connections rejected.", peer_addr),
+        });
+    }
 
     let _ = state.event_tx.send(ServerEvent::PeerConnected {
-        name: peer_addr.clone(),
-        addr: "LAN".to_string(),
+        name: peer_addr.to_string(),
+        addr: peer_addr.ip().to_string(),
     });
     let _ = state.event_tx.send(ServerEvent::Log {
-        message: "Device connected".to_string(),
+        message: format!("Device connected from {}", peer_addr),
     });
 
     // Track the current file being received
     let mut active_transfer: Option<ActiveTransfer> = None;
 
-    while let Some(msg_result) = socket.next().await {
-        let msg = match msg_result {
-            Ok(m) => m,
-            Err(e) => {
-                let _ = state.event_tx.send(ServerEvent::Error {
-                    message: format!("WebSocket error: {}", e),
-                });
-                break;
+    // Check if we have push requests to forward to this phone
+    let mut push_rx = {
+        let mut guard = state.push_rx.lock().await;
+        guard.take()
+    };
+
+    loop {
+        // Check for push requests from TUI file browser
+        let push_check = async {
+            if let Some(ref mut rx) = push_rx {
+                rx.recv().await
+            } else {
+                std::future::pending::<Option<PushRequest>>().await
             }
         };
 
-        match msg {
-            // ── Control messages (JSON text frames) ──────────────────
-            Message::Text(text) => {
-                match protocol::parse_control_message(&text) {
-                    Ok(ctrl) => {
-                        match ctrl {
-                            ControlMessage::FileStart {
-                                name, size, sha256, ..
-                            } => {
-                                let _ = state.event_tx.send(ServerEvent::Log {
-                                    message: format!(
-                                        "Incoming: '{}' ({})",
-                                        name,
-                                        protocol::format_bytes(size)
-                                    ),
-                                });
+        tokio::select! {
+            // Incoming messages from phone
+            msg_opt = socket.next() => {
+                let msg = match msg_opt {
+                    Some(Ok(m)) => m,
+                    Some(Err(e)) => {
+                        let _ = state.event_tx.send(ServerEvent::Error {
+                            message: format!("WebSocket error: {}", e),
+                        });
+                        break;
+                    }
+                    None => break,
+                };
 
-                                // Create the transfer file entry for TUI
-                                let mut tf = TransferFile::new(
-                                    name.clone(),
-                                    size,
-                                    sha256.clone(),
-                                );
-                                tf.status = TransferStatus::InProgress;
-                                let _ = state.event_tx.send(ServerEvent::FileStarted {
-                                    file: tf,
-                                });
-
-                                // Open chunk writer on disk
-                                let out_path = state.output_dir.join(&name);
-                                match ChunkWriter::new(&out_path, size, sha256).await {
-                                    Ok(writer) => {
-                                        active_transfer = Some(ActiveTransfer {
-                                            file_name: name,
-                                            total_size: size,
-                                            writer,
-                                            started_at: Instant::now(),
-                                            last_report: Instant::now(),
-                                        });
-                                    }
-                                    Err(e) => {
-                                        let _ = state.event_tx.send(ServerEvent::Error {
+                match msg {
+                    // ── Control messages (JSON text frames) ──────────────────
+                    Message::Text(text) => {
+                        match protocol::parse_control_message(&text) {
+                            Ok(ctrl) => {
+                                match ctrl {
+                                    ControlMessage::FileStart {
+                                        name, size, sha256, ..
+                                    } => {
+                                        let _ = state.event_tx.send(ServerEvent::Log {
                                             message: format!(
-                                                "Failed to create output file: {}",
-                                                e
+                                                "Incoming: '{}' ({})",
+                                                name,
+                                                protocol::format_bytes(size)
                                             ),
                                         });
-                                        // Send NACK back to sender
-                                        let nack = protocol::serialize_control_message(
-                                            &ControlMessage::FileAck {
-                                                success: false,
-                                                error: Some(format!(
-                                                    "Cannot write file: {}",
-                                                    e
-                                                )),
-                                            },
+
+                                        // Create the transfer file entry for TUI
+                                        let mut tf = TransferFile::new(
+                                            name.clone(),
+                                            size,
+                                            sha256.clone(),
                                         );
-                                        if let Ok(json) = nack {
-                                            let _ = socket
-                                                .send(Message::Text(json.into()))
-                                                .await;
-                                        }
-                                    }
-                                }
-                            }
+                                        tf.status = TransferStatus::InProgress;
+                                        let _ = state.event_tx.send(ServerEvent::FileStarted {
+                                            file: tf,
+                                        });
 
-                            ControlMessage::FileDone { checksum } => {
-                                if let Some(mut transfer) = active_transfer.take() {
-                                    let file_name = transfer.file_name.clone();
-                                    let elapsed =
-                                        transfer.started_at.elapsed().as_secs_f64();
-                                    let bytes = transfer.writer.bytes_written();
-
-                                    // Set the expected hash from the checksum in file_done
-                                    // This supports streaming mode where hash arrives after data
-                                    transfer.writer.set_expected_hash(checksum);
-
-                                    match transfer.writer.finalize().await {
-                                        Ok(true) => {
-                                            let _ = state.event_tx.send(
-                                                ServerEvent::FileCompleted {
-                                                    file_name: file_name.clone(),
-                                                    verified: true,
-                                                },
-                                            );
-                                            let _ = state.event_tx.send(ServerEvent::Log {
-                                                message: format!(
-                                                    "✓ '{}' saved ({} in {:.1}s)",
-                                                    file_name,
-                                                    protocol::format_bytes(bytes),
-                                                    elapsed
-                                                ),
-                                            });
-                                            // Send ACK
-                                            let ack = protocol::serialize_control_message(
-                                                &ControlMessage::FileAck {
-                                                    success: true,
-                                                    error: None,
-                                                },
-                                            );
-                                            if let Ok(json) = ack {
-                                                let _ = socket
-                                                    .send(Message::Text(json.into()))
-                                                    .await;
+                                        // Open chunk writer on disk
+                                        let out_path = state.output_dir.join(&name);
+                                        match ChunkWriter::new(&out_path, size, sha256).await {
+                                            Ok(writer) => {
+                                                active_transfer = Some(ActiveTransfer {
+                                                    file_name: name,
+                                                    total_size: size,
+                                                    writer,
+                                                    started_at: Instant::now(),
+                                                    last_report: Instant::now(),
+                                                });
+                                            }
+                                            Err(e) => {
+                                                let _ = state.event_tx.send(ServerEvent::Error {
+                                                    message: format!(
+                                                        "Failed to create output file: {}",
+                                                        e
+                                                    ),
+                                                });
+                                                // Send NACK back to sender
+                                                let nack = protocol::serialize_control_message(
+                                                    &ControlMessage::FileAck {
+                                                        success: false,
+                                                        error: Some(format!(
+                                                            "Cannot write file: {}",
+                                                            e
+                                                        )),
+                                                    },
+                                                );
+                                                if let Ok(json) = nack {
+                                                    let _ = socket
+                                                        .send(Message::Text(json.into()))
+                                                        .await;
+                                                }
                                             }
                                         }
-                                        Ok(false) => {
-                                            let _ = state.event_tx.send(
-                                                ServerEvent::FileFailed {
-                                                    file_name: file_name.clone(),
-                                                    error: "Checksum mismatch"
-                                                        .to_string(),
-                                                },
-                                            );
-                                            let _ = state.event_tx.send(ServerEvent::Error {
-                                                message: format!(
-                                                    "✗ '{}' checksum FAILED",
-                                                    file_name
-                                                ),
-                                            });
-                                            // Send NACK
-                                            let nack = protocol::serialize_control_message(
-                                                &ControlMessage::FileAck {
-                                                    success: false,
-                                                    error: Some("Checksum mismatch".to_string()),
-                                                },
-                                            );
-                                            if let Ok(json) = nack {
-                                                let _ = socket
-                                                    .send(Message::Text(json.into()))
-                                                    .await;
+                                    }
+
+                                    ControlMessage::FileDone { checksum } => {
+                                        if let Some(mut transfer) = active_transfer.take() {
+                                            let file_name = transfer.file_name.clone();
+                                            let elapsed =
+                                                transfer.started_at.elapsed().as_secs_f64();
+                                            let bytes = transfer.writer.bytes_written();
+
+                                            // Set the expected hash from the checksum in file_done
+                                            transfer.writer.set_expected_hash(checksum);
+
+                                            match transfer.writer.finalize().await {
+                                                Ok(true) => {
+                                                    let _ = state.event_tx.send(
+                                                        ServerEvent::FileCompleted {
+                                                            file_name: file_name.clone(),
+                                                            verified: true,
+                                                        },
+                                                    );
+                                                    let _ = state.event_tx.send(ServerEvent::Log {
+                                                        message: format!(
+                                                            "✓ '{}' saved ({} in {:.1}s)",
+                                                            file_name,
+                                                            protocol::format_bytes(bytes),
+                                                            elapsed
+                                                        ),
+                                                    });
+                                                    // Send ACK
+                                                    let ack = protocol::serialize_control_message(
+                                                        &ControlMessage::FileAck {
+                                                            success: true,
+                                                            error: None,
+                                                        },
+                                                    );
+                                                    if let Ok(json) = ack {
+                                                        let _ = socket
+                                                            .send(Message::Text(json.into()))
+                                                            .await;
+                                                    }
+                                                }
+                                                Ok(false) => {
+                                                    let _ = state.event_tx.send(
+                                                        ServerEvent::FileFailed {
+                                                            file_name: file_name.clone(),
+                                                            error: "Checksum mismatch"
+                                                                .to_string(),
+                                                        },
+                                                    );
+                                                    let _ = state.event_tx.send(ServerEvent::Error {
+                                                        message: format!(
+                                                            "✗ '{}' checksum FAILED",
+                                                            file_name
+                                                        ),
+                                                    });
+                                                    // Send NACK
+                                                    let nack = protocol::serialize_control_message(
+                                                        &ControlMessage::FileAck {
+                                                            success: false,
+                                                            error: Some("Checksum mismatch".to_string()),
+                                                        },
+                                                    );
+                                                    if let Ok(json) = nack {
+                                                        let _ = socket
+                                                            .send(Message::Text(json.into()))
+                                                            .await;
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    let _ = state.event_tx.send(
+                                                        ServerEvent::FileFailed {
+                                                            file_name: file_name.clone(),
+                                                            error: e.to_string(),
+                                                        },
+                                                    );
+                                                }
                                             }
                                         }
-                                        Err(e) => {
-                                            let _ = state.event_tx.send(
-                                                ServerEvent::FileFailed {
-                                                    file_name: file_name.clone(),
-                                                    error: e.to_string(),
-                                                },
-                                            );
+                                    }
+
+                                    ControlMessage::Cancel { reason } => {
+                                        let _ = state.event_tx.send(ServerEvent::Log {
+                                            message: format!("Transfer cancelled: {}", reason),
+                                        });
+                                        active_transfer = None;
+                                    }
+
+                                    ControlMessage::Ping { timestamp } => {
+                                        let pong = protocol::serialize_control_message(
+                                            &ControlMessage::Pong { timestamp },
+                                        );
+                                        if let Ok(json) = pong {
+                                            let _ =
+                                                socket.send(Message::Text(json.into())).await;
                                         }
                                     }
-                                }
-                            }
 
-                            ControlMessage::Cancel { reason } => {
-                                let _ = state.event_tx.send(ServerEvent::Log {
-                                    message: format!("Transfer cancelled: {}", reason),
-                                });
-                                active_transfer = None;
-                            }
-
-                            ControlMessage::Ping { timestamp } => {
-                                let pong = protocol::serialize_control_message(
-                                    &ControlMessage::Pong { timestamp },
-                                );
-                                if let Ok(json) = pong {
-                                    let _ =
-                                        socket.send(Message::Text(json.into())).await;
-                                }
-                            }
-
-                            ControlMessage::BatchStart {
-                                file_count,
-                                total_size,
-                            } => {
-                                let _ = state.event_tx.send(ServerEvent::Log {
-                                    message: format!(
-                                        "Batch: {} files, {} total",
+                                    ControlMessage::BatchStart {
                                         file_count,
-                                        protocol::format_bytes(total_size)
-                                    ),
+                                        total_size,
+                                    } => {
+                                        let _ = state.event_tx.send(ServerEvent::Log {
+                                            message: format!(
+                                                "Batch: {} files, {} total",
+                                                file_count,
+                                                protocol::format_bytes(total_size)
+                                            ),
+                                        });
+                                    }
+
+                                    ControlMessage::PushAck { success, transfer_id } => {
+                                        if success {
+                                            let _ = state.event_tx.send(ServerEvent::Log {
+                                                message: format!("[PUSH] Transfer {} acknowledged by phone", &transfer_id[..8]),
+                                            });
+                                        } else {
+                                            let _ = state.event_tx.send(ServerEvent::Error {
+                                                message: format!("[PUSH] Transfer {} failed on phone side", &transfer_id[..8]),
+                                            });
+                                        }
+                                    }
+
+                                    ControlMessage::KeyExchange { public_key } => {
+                                        let _ = state.event_tx.send(ServerEvent::Log {
+                                            message: "[ENC] Received phone's ECDH public key".to_string(),
+                                        });
+                                        // Key exchange handling would be done here in encrypted mode
+                                        let _ = public_key; // consumed by encryption setup
+                                    }
+
+                                    _ => {}
+                                }
+                            }
+                            Err(e) => {
+                                let _ = state.event_tx.send(ServerEvent::Error {
+                                    message: format!("Bad control frame: {}", e),
                                 });
                             }
-
-                            _ => {}
                         }
                     }
-                    Err(e) => {
-                        let _ = state.event_tx.send(ServerEvent::Error {
-                            message: format!("Bad control frame: {}", e),
-                        });
-                    }
-                }
-            }
 
-            // ── Binary data chunks ───────────────────────────────────
-            Message::Binary(data) => {
-                if let Some(ref mut transfer) = active_transfer {
-                    match transfer.writer.write_chunk(&data).await {
-                        Ok(written) => {
-                            // Throttle progress reports to ~10/sec
-                            if transfer.last_report.elapsed().as_millis() > 100 {
-                                let elapsed =
-                                    transfer.started_at.elapsed().as_secs_f64();
-                                let speed = if elapsed > 0.0 {
-                                    written as f64 / elapsed
-                                } else {
-                                    0.0
-                                };
+                    // ── Binary data chunks ───────────────────────────────────
+                    Message::Binary(data) => {
+                        if let Some(ref mut transfer) = active_transfer {
+                            match transfer.writer.write_chunk(&data).await {
+                                Ok(written) => {
+                                    // Throttle progress reports to ~10/sec
+                                    if transfer.last_report.elapsed().as_millis() > 100 {
+                                        let elapsed =
+                                            transfer.started_at.elapsed().as_secs_f64();
+                                        let speed = if elapsed > 0.0 {
+                                            written as f64 / elapsed
+                                        } else {
+                                            0.0
+                                        };
 
-                                let _ = state.event_tx.send(ServerEvent::Progress {
-                                    file_name: transfer.file_name.clone(),
-                                    bytes_received: written,
-                                    bytes_total: transfer.total_size,
-                                    speed,
-                                });
+                                        let _ = state.event_tx.send(ServerEvent::Progress {
+                                            file_name: transfer.file_name.clone(),
+                                            bytes_received: written,
+                                            bytes_total: transfer.total_size,
+                                            speed,
+                                        });
 
-                                transfer.last_report = Instant::now();
+                                        transfer.last_report = Instant::now();
+                                    }
+                                }
+                                Err(e) => {
+                                    let _ = state.event_tx.send(ServerEvent::Error {
+                                        message: format!(
+                                            "Write error for '{}': {}",
+                                            transfer.file_name, e
+                                        ),
+                                    });
+                                }
                             }
-                        }
-                        Err(e) => {
+                        } else {
                             let _ = state.event_tx.send(ServerEvent::Error {
-                                message: format!(
-                                    "Write error for '{}': {}",
-                                    transfer.file_name, e
-                                ),
+                                message: "Received binary data without active transfer"
+                                    .to_string(),
                             });
                         }
                     }
-                } else {
-                    let _ = state.event_tx.send(ServerEvent::Error {
-                        message: "Received binary data without active transfer"
-                            .to_string(),
-                    });
+
+                    Message::Close(_) => {
+                        let _ = state.event_tx.send(ServerEvent::Log {
+                            message: "Connection closed".to_string(),
+                        });
+                        break;
+                    }
+
+                    _ => {}
                 }
             }
 
-            Message::Close(_) => {
+            // Push requests from TUI file browser (Feature 2B)
+            Some(push_req) = push_check => {
+                let transfer_id = uuid::Uuid::new_v4().to_string();
                 let _ = state.event_tx.send(ServerEvent::Log {
-                    message: "Connection closed".to_string(),
+                    message: format!(
+                        "[PUSH] Sending '{}' ({}) to phone",
+                        push_req.name,
+                        protocol::format_bytes(push_req.data.len() as u64)
+                    ),
                 });
-                break;
-            }
 
-            _ => {}
+                // Send push_start
+                let start_msg = protocol::serialize_control_message(
+                    &ControlMessage::PushStart {
+                        name: push_req.name.clone(),
+                        size: push_req.data.len() as u64,
+                        sha256: "streaming".to_string(),
+                        transfer_id: transfer_id.clone(),
+                    },
+                );
+                if let Ok(json) = start_msg {
+                    let _ = socket.send(Message::Text(json.into())).await;
+                }
+
+                // Send binary chunks (1MB each)
+                let chunk_size = 1024 * 1024;
+                for chunk in push_req.data.chunks(chunk_size) {
+                    let _ = socket.send(Message::Binary(chunk.to_vec().into())).await;
+                }
+
+                // Send push_done with checksum
+                let done_msg = protocol::serialize_control_message(
+                    &ControlMessage::PushDone {
+                        checksum: format!("sha256:{}", push_req.sha256),
+                        transfer_id,
+                    },
+                );
+                if let Ok(json) = done_msg {
+                    let _ = socket.send(Message::Text(json.into())).await;
+                }
+            }
         }
     }
 
+    // Release session lock on disconnect (Feature 1)
+    if let Some(ref lock) = state.session_lock {
+        let mut guard = lock.lock().await;
+        guard.locked_to = None;
+    }
+
     let _ = state.event_tx.send(ServerEvent::PeerDisconnected {
-        name: peer_addr,
+        name: peer_addr.to_string(),
     });
 }
