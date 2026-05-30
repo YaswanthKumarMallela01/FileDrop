@@ -7,99 +7,92 @@ use std::env;
 use std::fs;
 use std::io::{stdout, Write};
 use std::path::PathBuf;
-use std::process::Command;
 
 pub fn install_self() -> Result<()> {
     let current_exe = env::current_exe().context("Failed to get current executable path")?;
     let mut stdout = stdout();
 
     #[cfg(target_os = "windows")]
-    {
-        // Target: %LOCALAPPDATA%\FileDrop\bin\filedrop.exe
+    let (install_dir, target_exe) = {
         let local_app_data =
             env::var("LOCALAPPDATA").context("LOCALAPPDATA environment variable not found")?;
-        let install_dir = PathBuf::from(local_app_data).join("FileDrop").join("bin");
+        let dir = PathBuf::from(local_app_data).join("FileDrop").join("bin");
+        let exe = dir.join("filedrop.exe");
+        (dir, exe)
+    };
 
-        execute!(
-            stdout,
-            Print(format!(
-                "\r\n[*] Installing to {}...\r\n",
-                install_dir.display()
-            ))
-        )?;
+    #[cfg(not(target_os = "windows"))]
+    let (install_dir, target_exe) = {
+        let home = env::var("HOME").context("HOME environment variable not found")?;
+        let dir = PathBuf::from(home).join(".local").join("bin");
+        let exe = dir.join("filedrop");
+        (dir, exe)
+    };
 
-        fs::create_dir_all(&install_dir)?;
-        let target_exe = install_dir.join("filedrop.exe");
-
-        fs::copy(&current_exe, &target_exe)?;
-
-        execute!(stdout, Print("[*] Adding to system PATH...\r\n"))?;
-
-        // Add to User PATH via PowerShell
-        let script = format!(
-            "$oldPath = [Environment]::GetEnvironmentVariable('Path', 'User'); \
-             if ($oldPath -notmatch [regex]::Escape('{}')) {{ \
-                 $newPath = $oldPath + ';{}'; \
-                 [Environment]::SetEnvironmentVariable('Path', $newPath, 'User'); \
-             }}",
-            install_dir.display(),
+    execute!(
+        stdout,
+        SetForegroundColor(Color::Cyan),
+        Print(format!(
+            "\r\n[*] Installing to {}...\r\n",
             install_dir.display()
-        );
+        )),
+        ResetColor
+    )?;
 
-        let status = Command::new("powershell")
-            .arg("-NoProfile")
-            .arg("-Command")
-            .arg(&script)
-            .status()?;
-
-        if !status.success() {
-            anyhow::bail!("Failed to modify PATH via PowerShell.");
-        }
-    }
+    fs::create_dir_all(&install_dir)?;
+    fs::copy(&current_exe, &target_exe)?;
 
     #[cfg(not(target_os = "windows"))]
     {
-        let home = env::var("HOME").context("HOME environment variable not found")?;
-        let install_dir = PathBuf::from(home).join(".local").join("bin");
-
-        execute!(
-            stdout,
-            Print(format!(
-                "\r\n[*] Installing to {}...\r\n",
-                install_dir.display()
-            ))
-        )?;
-
-        fs::create_dir_all(&install_dir)?;
-        let target_exe = install_dir.join("filedrop");
-
-        fs::copy(&current_exe, &target_exe)?;
-
-        // Set executable permissions
         use std::os::unix::fs::PermissionsExt;
         let mut perms = fs::metadata(&target_exe)?.permissions();
         perms.set_mode(0o755);
         fs::set_permissions(&target_exe, perms)?;
-
-        execute!(
-            stdout,
-            Print("[*] Make sure ~/.local/bin is in your PATH.\r\n")
-        )?;
     }
 
     execute!(
         stdout,
         SetForegroundColor(Color::Green),
-        Print("\r\n[+] Successfully installed FileDrop!\r\n\r\n"),
-        SetForegroundColor(Color::Cyan),
-        Print("Quick Guide:\r\n"),
-        ResetColor,
-        Print("  1. Close this terminal and open a new one.\r\n"),
-        Print("  2. Type 'filedrop receive' to receive files into the current folder.\r\n"),
-        Print("  3. Type 'filedrop share' to share files from the current folder.\r\n"),
-        Print("  4. Type 'filedrop --help' to see all commands.\r\n\r\n"),
+        Print("\r\n[+] Successfully copied FileDrop!\r\n\r\n"),
         SetForegroundColor(Color::Yellow),
-        Print("Press Enter to continue...\r\n"),
+        Print("⚠️  ACTION REQUIRED TO COMPLETE INSTALLATION ⚠️\r\n"),
+        ResetColor,
+        Print("To run 'filedrop' from any terminal, you must add its folder to your system PATH.\r\n\r\n")
+    )?;
+
+    #[cfg(target_os = "windows")]
+    {
+        execute!(
+            stdout,
+            Print("How to add it to PATH on Windows:\r\n"),
+            Print("  1. Press the Windows Key, type 'Environment Variables', and press Enter.\r\n"),
+            Print("  2. Click 'Environment Variables...' at the bottom.\r\n"),
+            Print("  3. Under 'User variables', select 'Path' and click 'Edit...'.\r\n"),
+            Print("  4. Click 'New' and paste the following folder path:\r\n"),
+            SetForegroundColor(Color::Cyan),
+            Print(format!("     {}\r\n", install_dir.display())),
+            ResetColor,
+            Print("  5. Click OK on all windows, close your terminal, and open a new one!\r\n\r\n")
+        )?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        execute!(
+            stdout,
+            Print("How to add it to PATH on Mac/Linux:\r\n"),
+            Print("  Add the following line to your ~/.bashrc or ~/.zshrc file:\r\n"),
+            SetForegroundColor(Color::Cyan),
+            Print(format!("     export PATH=\"$PATH:{}\"\r\n", install_dir.display())),
+            ResetColor,
+            Print("  Then restart your terminal!\r\n\r\n")
+        )?;
+    }
+
+    execute!(
+        stdout,
+        SetForegroundColor(Color::DarkGrey),
+        Print("Press Enter to exit...\r\n"),
         ResetColor
     )?;
     stdout.flush()?;
