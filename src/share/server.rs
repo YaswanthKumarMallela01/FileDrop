@@ -617,7 +617,7 @@ fn print_terminal_summary(
 
     println!();
     println!("  \x1b[32m╔══════════════════════════════════════════════════════════════╗\x1b[0m");
-    println!("  \x1b[32m║\x1b[0m  \x1b[1;32mFileDrop v0.2.0 — EPHEMERAL SHARE\x1b[0m                           \x1b[32m║\x1b[0m");
+    println!("  \x1b[32m║\x1b[0m  \x1b[1;32mFileDrop v0.3.1 — EPHEMERAL SHARE\x1b[0m                           \x1b[32m║\x1b[0m");
     println!("  \x1b[32m╠══════════════════════════════════════════════════════════════╣\x1b[0m");
     println!("  \x1b[32m║\x1b[0m  File    : \x1b[1;32m{:<49}\x1b[0m\x1b[32m║\x1b[0m", file_name);
     println!("  \x1b[32m║\x1b[0m  Size    : {:<49}\x1b[32m║\x1b[0m", size_display);
@@ -748,7 +748,7 @@ fn html_download_page(file_name: &str, file_size: u64, sha256: &str, token: &str
 </head>
 <body>
 <div class="card">
-  <h1>[FILEDROP] v0.2.0 :: RECEIVE_MODE</h1>
+  <h1>[FILEDROP] v0.3.1 :: RECEIVE_MODE</h1>
   <div class="meta" style="margin-top: 1.5rem;">
     <div>File: <span>{file_name}</span></div>
     <div>Size: <span>{size_display}</span></div>

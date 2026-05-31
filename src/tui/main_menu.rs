@@ -1,12 +1,18 @@
 use crate::Commands;
 use crossterm::{
-    cursor::{Hide, MoveTo, Show},
     event::{self, Event, KeyCode},
     execute,
-    style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::io::{stdout, Write};
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Alignment, Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
+    Terminal,
+};
+use std::io::stdout;
 
 pub enum MenuAction {
     RunCommand(Commands),
@@ -15,11 +21,14 @@ pub enum MenuAction {
 }
 
 pub async fn run_main_menu() -> anyhow::Result<MenuAction> {
-    let mut stdout = stdout();
     enable_raw_mode()?;
-    execute!(stdout, EnterAlternateScreen, Hide)?;
+    let mut stdout = stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+    terminal.clear()?;
 
-    let options = [
+    let options = vec![
         "Receive Files (From Phone)",
         "Share Files (To Phone)",
         "Pair New Device",
@@ -29,64 +38,116 @@ pub async fn run_main_menu() -> anyhow::Result<MenuAction> {
         "Exit",
     ];
 
-    let mut selected = 0;
+    let mut selected_index = 0;
 
     loop {
-        execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
-        execute!(
-            stdout,
-            SetForegroundColor(Color::Green),
-            Print("\r\n  ╔══════════════════════════════════════════════════════════════════╗\r\n"),
-            Print("  ║                                                                  ║\r\n"),
-            Print("  ║               [ FILEDROP ]  —  MAIN MENU                         ║\r\n"),
-            Print("  ║                                                                  ║\r\n"),
-            Print("  ╚══════════════════════════════════════════════════════════════════╝\r\n\r\n"),
-            ResetColor
-        )?;
+        terminal.draw(|f| {
+            let size = f.area();
 
-        for (i, option) in options.iter().enumerate() {
-            if i == selected {
-                execute!(
-                    stdout,
-                    SetForegroundColor(Color::Black),
-                    SetBackgroundColor(Color::Green),
-                    Print(format!("    > {:<60} \r\n", option)),
-                    ResetColor
-                )?;
-            } else {
-                execute!(stdout, Print(format!("      {:<60} \r\n", option)))?;
-            }
-        }
+            let vertical_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(2),  // Top margin
+                    Constraint::Length(7),  // Header
+                    Constraint::Length(12), // Menu
+                    Constraint::Min(0),     // Bottom
+                ])
+                .split(size);
 
-        execute!(
-            stdout,
-            Print("\r\n  Use Up/Down arrows to navigate, Enter to select.\r\n")
-        )?;
+            let horizontal_layout = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(80),
+                    Constraint::Percentage(10),
+                ])
+                .split(vertical_layout[1]);
 
-        stdout.flush()?;
+            let header_area = horizontal_layout[1];
+
+            let header_text = vec![
+                Line::from(Span::styled("╔══════════════════════════════════════════════════════════════════╗", Style::default().fg(Color::Green))),
+                Line::from(Span::styled("║                                                                  ║", Style::default().fg(Color::Green))),
+                Line::from(vec![
+                    Span::styled("║               ", Style::default().fg(Color::Green)),
+                    Span::styled("[ FILEDROP ]  —  MAIN MENU", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                    Span::styled("                         ║", Style::default().fg(Color::Green)),
+                ]),
+                Line::from(Span::styled("║                                                                  ║", Style::default().fg(Color::Green))),
+                Line::from(Span::styled("╚══════════════════════════════════════════════════════════════════╝", Style::default().fg(Color::Green))),
+            ];
+
+            let header = Paragraph::new(header_text).alignment(Alignment::Center);
+            f.render_widget(header, header_area);
+
+            let menu_horizontal = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(60),
+                    Constraint::Percentage(20),
+                ])
+                .split(vertical_layout[2]);
+
+            let menu_area = menu_horizontal[1];
+
+            let items: Vec<ListItem> = options
+                .iter()
+                .enumerate()
+                .map(|(i, &opt)| {
+                    if i == selected_index {
+                        ListItem::new(format!("  > {} ", opt)).style(
+                            Style::default()
+                                .fg(Color::Black)
+                                .bg(Color::Green)
+                                .add_modifier(Modifier::BOLD),
+                        )
+                    } else {
+                        ListItem::new(format!("    {} ", opt)).style(Style::default().fg(Color::White))
+                    }
+                })
+                .collect();
+
+            let list = List::new(items).block(Block::default().borders(Borders::NONE));
+            f.render_widget(list, menu_area);
+
+            let footer_area = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(80),
+                    Constraint::Percentage(10),
+                ])
+                .split(vertical_layout[3])[1];
+
+            let footer = Paragraph::new("Use Up/Down arrows to navigate, Enter to select.")
+                .alignment(Alignment::Center)
+                .style(Style::default().fg(Color::DarkGray));
+            f.render_widget(footer, footer_area);
+        })?;
 
         if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Up | KeyCode::Char('k') => {
-                        if selected > 0 {
-                            selected -= 1;
+                        if selected_index > 0 {
+                            selected_index -= 1;
                         } else {
-                            selected = options.len() - 1;
+                            selected_index = options.len() - 1;
                         }
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
-                        if selected < options.len() - 1 {
-                            selected += 1;
+                        if selected_index < options.len() - 1 {
+                            selected_index += 1;
                         } else {
-                            selected = 0;
+                            selected_index = 0;
                         }
                     }
                     KeyCode::Enter => {
                         break;
                     }
                     KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
-                        selected = options.len() - 1; // Exit option
+                        selected_index = options.len() - 1; // Exit
                         break;
                     }
                     _ => {}
@@ -96,9 +157,10 @@ pub async fn run_main_menu() -> anyhow::Result<MenuAction> {
     }
 
     disable_raw_mode()?;
-    execute!(stdout, Show, LeaveAlternateScreen)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
 
-    match selected {
+    match selected_index {
         0 => Ok(MenuAction::RunCommand(Commands::Receive {
             mode: None,
             multi: false,

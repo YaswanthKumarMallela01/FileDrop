@@ -1,7 +1,7 @@
 //! TUI rendering — Hacker-themed Ratatui widget composition.
 //!
 //! ╔═══════════════════════════════════════════════════╗
-//! ║  [FILEDROP] v0.2.0  ::  RECEIVE_MODE  ::  ONLINE   ║
+//! ║  [FILEDROP] v0.3.1  ::  RECEIVE_MODE  ::  ONLINE   ║
 //! ╠═════════════════════╤═════════════════════════════╣
 //! ║  [ TRANSFER QUEUE ] │  [ SYSTEM LOG ]             ║
 //! ║  ─────────────────  │  ───────────────            ║
@@ -88,7 +88,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
             Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
         ),
         Span::styled("] ", Style::default().fg(MUTED)),
-        Span::styled("v0.2.0 ", Style::default().fg(TEXT_DIM)),
+        Span::styled("v0.3.1 ", Style::default().fg(TEXT_DIM)),
         Span::styled(" :: ", Style::default().fg(MUTED)),
         Span::styled(
             mode_text,

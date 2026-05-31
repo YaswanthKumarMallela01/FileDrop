@@ -861,7 +861,7 @@ pub async fn run_receive(
             println!();
         }
         println!("  \x1b[32m╔══════════════════════════════════════════════════════╗\x1b[0m");
-        println!("  \x1b[32m║\x1b[0m  \x1b[1;32m[FILEDROP]\x1b[0m  v0.2.0  ::  RECEIVE_MODE              \x1b[32m║\x1b[0m");
+        println!("  \x1b[32m║\x1b[0m  \x1b[1;32m[FILEDROP]\x1b[0m  v0.3.1  ::  RECEIVE_MODE              \x1b[32m║\x1b[0m");
         println!("  \x1b[32m╠══════════════════════════════════════════════════════╣\x1b[0m");
         println!("  \x1b[32m║\x1b[0m                                                      \x1b[32m║\x1b[0m");
         println!("  \x1b[32m║\x1b[0m  \x1b[1;32m> SCAN QR CODE ON PHONE TO CONNECT:\x1b[0m                 \x1b[32m║\x1b[0m");
@@ -991,7 +991,7 @@ async fn run_tui(
 
     // Initial log
     app.log(
-        format!("FileDrop v0.2.0 — {}", mode),
+        format!("FileDrop v0.3.1 — {}", mode),
         LogLevel::Info,
     );
 
