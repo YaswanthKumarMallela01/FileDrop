@@ -1,6 +1,6 @@
 [package]
 name = "filedrop"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 description = "Secure, fast, local Wi-Fi file transfer between laptop and phone"
 authors = ["FileDrop Team"]
@@ -94,3 +94,7 @@ strip = true
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
+windows-sys = { version = "0.48", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
+
+[build-dependencies]
+winres = "0.1.12"

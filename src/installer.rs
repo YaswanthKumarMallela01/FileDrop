@@ -89,12 +89,26 @@ pub fn install_self() -> Result<()> {
             };
             env_key.set_value("Path", &new_path)?;
             
+            unsafe {
+                let mut result = 0;
+                let env_str: Vec<u16> = "Environment\0".encode_utf16().collect();
+                windows_sys::Win32::UI::WindowsAndMessaging::SendMessageTimeoutW(
+                    0xffff as isize,
+                    windows_sys::Win32::UI::WindowsAndMessaging::WM_SETTINGCHANGE,
+                    0,
+                    env_str.as_ptr() as isize,
+                    windows_sys::Win32::UI::WindowsAndMessaging::SMTO_ABORTIFHUNG,
+                    5000,
+                    &mut result,
+                );
+            }
+            
             execute!(
                 stdout,
                 SetForegroundColor(Color::Green),
                 Print("\r\n[+] Successfully installed FileDrop and updated PATH!\r\n\r\n"),
                 SetForegroundColor(Color::Yellow),
-                Print("Note: You MUST close this terminal and open a new one for the PATH changes to take effect.\r\n\r\n"),
+                Print("Note: Your system has been notified of the PATH change. You can now open a new terminal and type 'filedrop'.\r\n\r\n"),
                 ResetColor
             )?;
         } else {

@@ -128,7 +128,8 @@ pub async fn run_main_menu() -> anyhow::Result<MenuAction> {
 
         if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
-                match key.code {
+                if key.kind == event::KeyEventKind::Press {
+                    match key.code {
                     KeyCode::Up | KeyCode::Char('k') => {
                         if selected_index > 0 {
                             selected_index -= 1;
@@ -151,6 +152,7 @@ pub async fn run_main_menu() -> anyhow::Result<MenuAction> {
                         break;
                     }
                     _ => {}
+                    }
                 }
             }
         }
