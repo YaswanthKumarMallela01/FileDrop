@@ -20,7 +20,7 @@
 
 <p align="center">
   <a href="https://github.com/YaswanthKumarMallela01/FileDrop/releases/tag/v0.3.2"><b>📦 Download v0.3.2</b></a> &nbsp;·&nbsp;
-  <a href="https://github.com/YaswanthKumarMallela01/FD-V-RWS"><b>🌐 Website</b></a> &nbsp;·&nbsp;
+  <a href="https://yaswanthkumarmallela01.github.io/FileDrop/"><b>🌐 Website</b></a> &nbsp;·&nbsp;
   <a href="https://github.com/YaswanthKumarMallela01/FileDrop/issues"><b>🐛 Report Bug</b></a>
 </p>
 
