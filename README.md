@@ -1,4 +1,5 @@
 <p align="center">
+  <img src="https://img.shields.io/badge/Version-0.3.2-00e87b?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/RUST-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/WebSocket-010101?style=for-the-badge&logo=socketdotio&logoColor=00FF41" alt="WebSocket">
   <img src="https://img.shields.io/badge/TUI-Terminal-00FF41?style=for-the-badge" alt="TUI">
@@ -9,12 +10,18 @@
 <h1 align="center">
   <code>[ FILEDROP ]</code>
   <br>
-  <sub>Secure Local Wi-Fi File Transfer · Phone → Laptop</sub>
+  <sub>Secure Local Wi-Fi File Transfer · Phone ↔ Laptop</sub>
 </h1>
 
 <p align="center">
-  <b>Transfer files from your phone to your laptop at full Wi-Fi speed.</b><br>
+  <b>Transfer files between your phone and laptop at full Wi-Fi speed.</b><br>
   No cloud. No internet. No app install. No file size limit. Just open a URL.
+</p>
+
+<p align="center">
+  <a href="https://github.com/YaswanthKumarMallela01/FileDrop/releases/tag/v0.3.2"><b>📦 Download v0.3.2</b></a> &nbsp;·&nbsp;
+  <a href="https://github.com/YaswanthKumarMallela01/FD-V-RWS"><b>🌐 Website</b></a> &nbsp;·&nbsp;
+  <a href="https://github.com/YaswanthKumarMallela01/FileDrop/issues"><b>🐛 Report Bug</b></a>
 </p>
 
 ---
@@ -36,29 +43,41 @@
 
 ## 🚀 Quick Start
 
-### Install on Any Device (No Rust Required)
+### ⬇️ Download Pre-Built Binary (Recommended)
 
-The easiest way to install FileDrop without installing Rust is to download the pre-compiled binary directly from the GitHub Releases page:
+No Rust or build tools needed. Download the single executable for your platform:
 
-**Windows (PowerShell):**
-```powershell
-Invoke-WebRequest -Uri "https://github.com/YaswanthKumarMallela01/FileDrop/releases/latest/download/filedrop-windows.exe" -OutFile "filedrop.exe"
-# Move filedrop.exe to a folder in your PATH
+| Platform | Download | Size |
+|----------|----------|------|
+| **Windows** | [filedrop-windows-amd64.exe](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.3.2/filedrop-windows-amd64.exe) | ~7.3 MB |
+| **Linux** | [filedrop-linux-amd64](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.3.2/filedrop-linux-amd64) | ~6.5 MB |
+| **macOS** | [filedrop-macos-amd64](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.3.2/filedrop-macos-amd64) | ~5.9 MB |
+
+#### Windows
+1. Download and **double-click** `filedrop-windows-amd64.exe`
+2. An interactive menu appears — select **"Install FileDrop (Add to System PATH)"**
+3. Open a **new** terminal and type `filedrop receive`
+
+#### Linux / macOS
+```bash
+# Linux
+wget https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.3.2/filedrop-linux-amd64
+chmod +x filedrop-linux-amd64
+sudo mv filedrop-linux-amd64 /usr/local/bin/filedrop
+
+# macOS
+curl -LO https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.3.2/filedrop-macos-amd64
+chmod +x filedrop-macos-amd64
+sudo mv filedrop-macos-amd64 /usr/local/bin/filedrop
 ```
 
-*(Note: You'll need to set up GitHub Actions to auto-build these releases for this to work out-of-the-box!)*
-
-### Install via Cargo (Requires Rust)
-
-If you already have Rust installed, you can compile and install it globally with one command:
+### 🔧 Build From Source (Requires Rust)
 
 ```bash
 cargo install --git https://github.com/YaswanthKumarMallela01/FileDrop.git
 ```
 
-That's it. `filedrop` is now globally available from any directory.
-
-### Alternative: Clone & Build
+Or clone and build:
 
 ```bash
 git clone https://github.com/YaswanthKumarMallela01/FileDrop.git
