@@ -33,7 +33,7 @@ pub async fn run_main_menu() -> anyhow::Result<MenuAction> {
         "Share Files (To Phone)",
         "Pair New Device",
         "List Paired Devices",
-        "Setup Hotspot (Direct Connection)",
+        "Offline Mode (No Wi-Fi Needed)",
         "Install FileDrop (Add to System PATH)",
         "Exit",
     ];

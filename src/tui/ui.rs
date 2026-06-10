@@ -1,7 +1,7 @@
 //! TUI rendering — Hacker-themed Ratatui widget composition.
 //!
 //! ╔═══════════════════════════════════════════════════╗
-//! ║  [FILEDROP] v0.3.2  ::  RECEIVE_MODE  ::  ONLINE   ║
+//! ║  [FILEDROP] v0.4.0  ::  RECEIVE_MODE  ::  ONLINE   ║
 //! ╠═════════════════════╤═════════════════════════════╣
 //! ║  [ TRANSFER QUEUE ] │  [ SYSTEM LOG ]             ║
 //! ║  ─────────────────  │  ───────────────            ║
@@ -88,7 +88,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
             Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
         ),
         Span::styled("] ", Style::default().fg(MUTED)),
-        Span::styled("v0.3.2 ", Style::default().fg(TEXT_DIM)),
+        Span::styled("v0.4.0 ", Style::default().fg(TEXT_DIM)),
         Span::styled(" :: ", Style::default().fg(MUTED)),
         Span::styled(
             mode_text,
@@ -747,24 +747,22 @@ pub fn render_hotspot_guide(frame: &mut Frame, os: &str) {
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            "  Follow these steps on your laptop:",
+            "  Follow these setup steps:",
             Style::default().fg(TEXT_PRIMARY).bold(),
         )),
         Line::from(""),
     ];
 
-    for (i, instruction) in instructions.iter().enumerate() {
-        lines.push(Line::from(vec![
-            Span::styled(format!("  {}. ", i + 1), Style::default().fg(GREEN).bold()),
-            Span::styled(instruction.as_str(), Style::default().fg(TEXT_PRIMARY)),
-        ]));
+    for instruction in instructions {
+        if instruction.trim().is_empty() {
+            lines.push(Line::from(""));
+        } else if instruction.starts_with("══") {
+            lines.push(Line::from(Span::styled(instruction, Style::default().fg(WARNING_AMBER).bold())));
+        } else {
+            lines.push(Line::from(Span::styled(instruction, Style::default().fg(TEXT_PRIMARY))));
+        }
     }
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  Then connect your phone to the hotspot Wi-Fi.",
-        Style::default().fg(WARNING_AMBER),
-    )));
     lines.push(Line::from(""));
     lines.push(Line::from(""));
 

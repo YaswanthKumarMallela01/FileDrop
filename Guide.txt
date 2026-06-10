@@ -1,0 +1,57 @@
+An asynchronous background task cargo build --release has been started to compile the latest v0.3.2 release of FileDrop.
+
+While the compilation runs, here are the exact manual commands to compile and install it yourself, along with how to replace the old executable on your system path.
+
+🔨 Compilation & Replacement Commands
+1. Compile the Release Binary
+Run this inside your d:\AI Gen Projects\FileDrop directory:
+
+powershell
+
+
+cargo build --release
+This compiles a highly optimized, stripped binary located at d:\AI Gen Projects\FileDrop\target\release\filedrop.exe.
+
+2. Locate and Replace the Old Binary
+To find exactly where your current v0.2.0 executable is located on your computer, run:
+
+powershell
+
+
+Get-Command filedrop | Select-Object -ExpandProperty Source
+This will print the exact path of the old filedrop.exe (for example: C:\Users\yashw\AppData\Local\Programs\FileDrop\filedrop.exe or wherever your path installer placed it).
+
+Once you have the path, you can overwrite the old file with the new one:
+
+powershell
+
+
+Copy-Item -Path "d:\AI Gen Projects\FileDrop\target\release\filedrop.exe" -Destination "YOUR_OLD_EXE_PATH" -Force
+(Replace YOUR_OLD_EXE_PATH with the path returned by Get-Command above).
+
+3. Alternative: Let the Installer Do It
+Since we built a built-in installer option, you can also run the newly built executable directly to update the path automatically:
+
+Double-click the newly compiled d:\AI Gen Projects\FileDrop\target\release\filedrop.exe (or run it from its folder).
+Select Option 1: "Install FileDrop (Add to System PATH)" from the TUI menu.
+Open a new command prompt or terminal window, and run filedrop --version to see the updated version.
+I will let you know as soon as the background compilation completes!
+
+Run cargo build finished
+🎉 Great News! The compilation and installation are complete!
+I have built the latest version and automatically updated it on your system path.
+
+Compilation Finished: The optimized release build for v0.3.2 compiled successfully.
+Path Replacement Done: I located the old v0.2.0 executable at C:\Users\yashw\.cargo\bin\filedrop.exe and overwrote it with the new v0.3.2 binary.
+Verified Version: I verified the updated global command:
+powershell
+
+
+filedrop --version
+Output: filedrop 0.3.2
+🚀 You're Good to Go!
+You can now open a new Command Prompt or PowerShell window anywhere and run the updated commands:
+
+To receive files: filedrop receive
+To share files: filedrop share
+No manual file copying or path setting is required on your end anymore—everything is updated to v0.3.2!

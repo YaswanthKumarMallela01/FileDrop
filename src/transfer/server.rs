@@ -120,7 +120,7 @@ pub async fn start_server(
         .route("/ws", get(ws_handler))
         .route(
             "/health",
-            get(|| async { "FileDrop v0.3.2 OK" }),
+            get(|| async { "FileDrop v0.4.0 OK" }),
         )
         // Serve the embedded web UI for phone browsers
         .route("/", get(crate::web::serve_index))

@@ -21,7 +21,7 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(
     name = "filedrop",
-    version = "0.3.2",
+    version = "0.4.0",
     about = "Secure, fast, local Wi-Fi file transfer between laptop and phone",
     long_about = "FileDrop enables secure file transfer between your laptop and paired phone \
                   over local Wi-Fi. No internet, no cloud — just fast, encrypted transfers \
@@ -154,7 +154,7 @@ async fn main() -> anyhow::Result<()> {
             init_tracing();
             println!();
             println!("  ╔══════════════════════════════════════╗");
-            println!("  ║       FileDrop v0.3.2 — Pairing      ║");
+            println!("  ║       FileDrop v0.4.0 — Pairing      ║");
             println!("  ╚══════════════════════════════════════╝");
             println!();
             security::pairing::start_pairing().await?;
@@ -525,7 +525,7 @@ fn get_local_ips(hotspot_mode: bool) -> Vec<String> {
 
     for ip in ips {
         let is_virtual = ip.starts_with("192.168.56.") || // VirtualBox default
-                         (ip.starts_with("172.") && {
+                         (ip.starts_with("172.") && !ip.starts_with("172.20.10.") && {
                              // Check if it's in the 172.16.x.x - 172.31.x.x private Class B block (typical for WSL2 and Hyper-V)
                              if let Some(second_octet) = ip.split('.').nth(1).and_then(|s| s.parse::<u8>().ok()) {
                                  (16..=31).contains(&second_octet)
@@ -543,20 +543,37 @@ fn get_local_ips(hotspot_mode: bool) -> Vec<String> {
     clean_ips.extend(virtual_ips);
     let mut ips = clean_ips;
 
-    // 5. If in hotspot mode, prioritize the hotspot IP range!
-    // On Windows, the default Mobile Hotspot IP is 192.168.137.1.
-    // If we find any IP starting with 192.168.137. in our list, move it to the front!
-    if hotspot_mode {
-        let hotspot_index = ips.iter().position(|ip| ip.starts_with("192.168.137."));
-        if let Some(idx) = hotspot_index {
+    // 5. Prioritize active interfaces:
+    // First, prioritize any active physical Wi-Fi adapter IP.
+    // Second, if in hotspot mode and no physical Wi-Fi IP was prioritized, prioritize any virtual hotspot IP (192.168.137.x).
+    let mut prioritized = false;
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        let wifi_cmd = "Get-NetAdapter | Where-Object Status -eq Up | Where-Object InterfaceDescription -match 'Wireless|Wi-Fi|802.11' | Get-NetIPAddress -AddressFamily IPv4 | Select-Object -ExpandProperty IPAddress";
+        if let Ok(out) = Command::new("powershell")
+            .args(["-NoProfile", "-Command", wifi_cmd])
+            .output()
+        {
+            let stdout_str = String::from_utf8_lossy(&out.stdout);
+            for line in stdout_str.lines() {
+                let ip = line.trim().to_string();
+                if !ip.is_empty() && ip != "127.0.0.1" {
+                    if let Some(pos) = ips.iter().position(|x| x == &ip) {
+                        let wifi_ip = ips.remove(pos);
+                        ips.insert(0, wifi_ip);
+                        prioritized = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if hotspot_mode && !prioritized {
+        if let Some(idx) = ips.iter().position(|ip| ip.starts_with("192.168.137.")) {
             let hotspot_ip = ips.remove(idx);
             ips.insert(0, hotspot_ip);
-        } else {
-            // If the adapter is active but not captured in fallback, explicitly add it on Windows
-            #[cfg(target_os = "windows")]
-            {
-                ips.insert(0, "192.168.137.1".to_string());
-            }
         }
     }
 
@@ -592,7 +609,7 @@ async fn run_demo_mode() -> anyhow::Result<()> {
     let mut app = AppState::new(AppMode::Receive);
 
     // Simulate initial state
-    app.log("FileDrop v0.3.2 — RECEIVE MODE".into(), LogLevel::Info);
+    app.log("FileDrop v0.4.0 — RECEIVE MODE".into(), LogLevel::Info);
     app.log("Server listening on ws://0.0.0.0:7878/ws".into(), LogLevel::Info);
     app.log("mDNS: Advertising 'my-laptop' on _filedrop._tcp.local".into(), LogLevel::Info);
     app.log("Waiting for incoming connections...".into(), LogLevel::Info);

@@ -9,8 +9,8 @@ fn main() -> io::Result<()> {
         res.set("OriginalFilename", "filedrop.exe");
         res.set("LegalCopyright", "Copyright (c) Yaswanth Kumar Mallela");
         res.set("CompanyName", "Yaswanth Kumar Mallela");
-        res.set("ProductVersion", "0.3.2");
-        res.set("FileVersion", "0.3.2");
+        res.set("ProductVersion", "0.4.0");
+        res.set("FileVersion", "0.4.0");
         res.compile()?;
     }
     Ok(())

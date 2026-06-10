@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.3.2-00e87b?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.4.0-00e87b?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/RUST-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/WebSocket-010101?style=for-the-badge&logo=socketdotio&logoColor=00FF41" alt="WebSocket">
   <img src="https://img.shields.io/badge/TUI-Terminal-00FF41?style=for-the-badge" alt="TUI">
@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/YaswanthKumarMallela01/FileDrop/releases/tag/v0.3.2"><b>📦 Download v0.3.2</b></a> &nbsp;·&nbsp;
+  <a href="https://github.com/YaswanthKumarMallela01/FileDrop/releases/tag/v0.4.0"><b>📦 Download v0.4.0</b></a> &nbsp;·&nbsp;
   <a href="https://yaswanthkumarmallela01.github.io/FileDrop/"><b>🌐 Website</b></a> &nbsp;·&nbsp;
   <a href="https://github.com/YaswanthKumarMallela01/FileDrop/issues"><b>🐛 Report Bug</b></a>
 </p>
@@ -38,6 +38,7 @@
 | **Speed** | 🚀 Full Wi-Fi speed | 🚀 | ⚠️ | 🐌 |
 | **Open source** | ✅ MIT License | ❌ | ❌ | N/A |
 | **Privacy** | ✅ No data leaves LAN | ✅ | ❌ Ads + tracking | ✅ |
+| **Offline mode** | ✅ Phone hotspot, no internet | ❌ Needs internet | ❌ Needs internet | ✅ |
 
 ---
 
@@ -49,9 +50,9 @@ No Rust or build tools needed. Download the single executable for your platform:
 
 | Platform | Download | Size |
 |----------|----------|------|
-| **Windows** | [filedrop-windows-amd64.exe](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.3.2/filedrop-windows-amd64.exe) | ~7.3 MB |
-| **Linux** | [filedrop-linux-amd64](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.3.2/filedrop-linux-amd64) | ~6.5 MB |
-| **macOS** | [filedrop-macos-amd64](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.3.2/filedrop-macos-amd64) | ~5.9 MB |
+| **Windows** | [filedrop-windows-amd64.exe](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.4.0/filedrop-windows-amd64.exe) | ~7.3 MB |
+| **Linux** | [filedrop-linux-amd64](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.4.0/filedrop-linux-amd64) | ~6.5 MB |
+| **macOS** | [filedrop-macos-amd64](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.4.0/filedrop-macos-amd64) | ~5.9 MB |
 
 #### Windows
 1. Download and **double-click** `filedrop-windows-amd64.exe`
@@ -61,12 +62,12 @@ No Rust or build tools needed. Download the single executable for your platform:
 #### Linux / macOS
 ```bash
 # Linux
-wget https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.3.2/filedrop-linux-amd64
+wget https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.4.0/filedrop-linux-amd64
 chmod +x filedrop-linux-amd64
 sudo mv filedrop-linux-amd64 /usr/local/bin/filedrop
 
 # macOS
-curl -LO https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.3.2/filedrop-macos-amd64
+curl -LO https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.4.0/filedrop-macos-amd64
 chmod +x filedrop-macos-amd64
 sudo mv filedrop-macos-amd64 /usr/local/bin/filedrop
 ```
