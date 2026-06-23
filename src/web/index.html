@@ -608,6 +608,29 @@
     color: #000;
   }
 
+  /* ── Layout Shift during Transfer ─────────────────── */
+  .content.transfer-active {
+    display: flex;
+    flex-direction: column;
+  }
+  .content.transfer-active #progressSection { order: 1; margin-bottom: 8px; }
+  .content.transfer-active #logSection      { order: 2; margin-bottom: 8px; }
+  .content.transfer-active #queueSection    { order: 3; margin-bottom: 8px; }
+  .content.transfer-active #dropZone        { order: 4; }
+  .content.transfer-active #sendSection     { order: 5; }
+  .content.transfer-active #receiveSection  { order: 6; }
+
+  .file-item-summary {
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    padding: 8px 12px;
+    text-align: center;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
   /* ── Scrollbar ────────────────────────────────────── */
   ::-webkit-scrollbar { width: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -625,7 +648,7 @@
     <span class="logo-bracket">[</span>
     <span class="logo-text">FileDrop</span>
     <span class="logo-bracket">]</span>
-    <span class="logo-ver">v0.4.0</span>
+    <span class="logo-ver">v0.5.0</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <button id="installBtn" class="install-btn" onclick="installPWA()">⬇ Install</button>
@@ -696,7 +719,7 @@
 </div>
 
 <div class="footer">
-  FileDrop v0.4.0 // encrypted local transfer // no cloud // no trace
+  FileDrop v0.5.0 // encrypted local transfer // no cloud // no trace
 </div>
 
 <script>
@@ -705,10 +728,12 @@
 //  Supports files up to 10GB+ via streaming hash + chunked send
 // ══════════════════════════════════════════════════════════
 
-const CHUNK_SIZE = 1024 * 1024;      // 1MB transfer chunks (was 256KB — 4x larger = less overhead)
+const CHUNK_SIZE = 4 * 1024 * 1024;  // 4MB transfer chunks
 const HASH_CHUNK_SIZE = 2*1024*1024; // 2MB hash chunks (streaming)
 let ws = null;
 let selectedFiles = [];
+let fileStatuses = [];
+let activeFileIndex = -1;
 let transferring = false;
 let totalBytes = 0;
 let totalSent = 0;
@@ -808,6 +833,7 @@ function addFiles(fileList) {
   for (const file of fileList) {
     if (selectedFiles.find(f => f.name === file.name && f.size === file.size)) continue;
     selectedFiles.push(file);
+    fileStatuses.push({ statusText: 'QUEUED', class: '', pct: 0, itemClass: '' });
   }
   renderQueue();
 }
@@ -815,6 +841,11 @@ function addFiles(fileList) {
 function clearFiles() {
   if (transferring) return;
   selectedFiles = [];
+  fileStatuses = [];
+  activeFileIndex = -1;
+  document.querySelector('.content').classList.remove('transfer-active');
+  document.getElementById('progressSection').classList.remove('visible');
+  document.getElementById('progressSection').classList.remove('complete');
   renderQueue();
 }
 
@@ -837,18 +868,84 @@ function renderQueue() {
   const total = selectedFiles.reduce((s, f) => s + f.size, 0);
   st.textContent = `${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''} // ${formatBytes(total)}`;
 
-  fl.innerHTML = selectedFiles.map((file, i) => `
-    <div class="file-item" id="file-${i}">
-      <div class="file-info">
-        <div class="file-name"><span>${escapeHtml(file.name)}</span></div>
-        <span class="file-size">${formatBytes(file.size)}</span>
-      </div>
-      <div class="file-progress-bar">
-        <div class="file-progress-fill" id="fileProg-${i}" style="width:0%"></div>
-      </div>
-      <div class="file-status" id="fileStatus-${i}">QUEUED</div>
-    </div>
-  `).join('');
+  if (transferring) {
+    // Elegant active-file-focused collapsed queue
+    const listHtml = [];
+    const prevCount = 5;
+    const nextCount = 5;
+    
+    // 1. Completed summary header
+    const startIdx = Math.max(0, activeFileIndex - prevCount);
+    if (startIdx > 0) {
+      listHtml.push(`
+        <div class="file-item-summary">
+          <span>✓ ${startIdx} file${startIdx > 1 ? 's' : ''} completed</span>
+        </div>
+      `);
+    }
+
+    // 2. Render files from startIdx to endIdx
+    const endIdx = Math.min(selectedFiles.length - 1, activeFileIndex + nextCount);
+    for (let i = startIdx; i <= endIdx; i++) {
+      const file = selectedFiles[i];
+      const status = fileStatuses[i] || { statusText: 'QUEUED', class: '', pct: 0, itemClass: '' };
+      
+      listHtml.push(`
+        <div class="file-item ${status.itemClass || ''}" id="file-${i}">
+          <div class="file-info">
+            <div class="file-name"><span>${escapeHtml(file.name)}</span></div>
+            <span class="file-size">${formatBytes(file.size)}</span>
+          </div>
+          <div class="file-progress-bar">
+            <div class="file-progress-fill" id="fileProg-${i}" style="width:${status.pct || 0}%"></div>
+          </div>
+          <div class="file-status ${status.class || ''}" id="fileStatus-${i}">${status.statusText || 'QUEUED'}</div>
+        </div>
+      `);
+    }
+
+    // 3. Remaining summary footer
+    const remainingCount = selectedFiles.length - 1 - endIdx;
+    if (remainingCount > 0) {
+      listHtml.push(`
+        <div class="file-item-summary">
+          <span>... ${remainingCount} more file${remainingCount > 1 ? 's' : ''} queued</span>
+        </div>
+      `);
+    }
+
+    fl.innerHTML = listHtml.join('');
+  } else {
+    // Preparation mode / final completed state
+    const maxVisible = 100;
+    const visibleFiles = selectedFiles.slice(0, maxVisible);
+    const listHtml = visibleFiles.map((file, i) => {
+      const status = fileStatuses[i] || { statusText: 'QUEUED', class: '', pct: 0, itemClass: '' };
+      return `
+        <div class="file-item ${status.itemClass || ''}" id="file-${i}">
+          <div class="file-info">
+            <div class="file-name"><span>${escapeHtml(file.name)}</span></div>
+            <span class="file-size">${formatBytes(file.size)}</span>
+          </div>
+          <div class="file-progress-bar">
+            <div class="file-progress-fill" id="fileProg-${i}" style="width:${status.pct || 0}%"></div>
+          </div>
+          <div class="file-status ${status.class || ''}" id="fileStatus-${i}">${status.statusText || 'QUEUED'}</div>
+        </div>
+      `;
+    });
+
+    if (selectedFiles.length > maxVisible) {
+      const extraCount = selectedFiles.length - maxVisible;
+      listHtml.push(`
+        <div class="file-item-summary">
+          <span>+ ${extraCount} more file${extraCount > 1 ? 's' : ''} queued...</span>
+        </div>
+      `);
+    }
+
+    fl.innerHTML = listHtml.join('');
+  }
 }
 
 // ── File Transfer ─────────────────────────────────────────
@@ -866,6 +963,7 @@ async function startTransfer() {
   document.getElementById('sendSection').classList.remove('visible');
   document.getElementById('progressSection').classList.add('visible');
   document.getElementById('logSection').classList.add('visible');
+  document.querySelector('.content').classList.add('transfer-active');
 
   log(`[SYS] Transfer initiated: ${selectedFiles.length} targets, ${formatBytes(totalBytes)}`, 'system');
 
@@ -876,8 +974,20 @@ async function startTransfer() {
   let ok = 0, fail = 0;
 
   for (let i = 0; i < selectedFiles.length; i++) {
-    try { await sendFile(selectedFiles[i], i); ok++; }
-    catch (err) { fail++; log(`[ERR] ${selectedFiles[i].name}: ${err.message}`, 'error'); setFileStatus(i, 'error', `ERR: ${err.message}`); }
+    activeFileIndex = i;
+    renderQueue();
+    try {
+      await sendFile(selectedFiles[i], i);
+      ok++;
+    }
+    catch (err) {
+      fail++;
+      log(`[ERR] ${selectedFiles[i].name}: ${err.message}`, 'error');
+      setFileStatus(i, 'error', `ERR: ${err.message}`);
+      if (fileStatuses[i]) fileStatuses[i].itemClass = 'failed';
+      const el = document.getElementById(`file-${i}`);
+      if (el) { el.classList.remove('active'); el.classList.add('failed'); }
+    }
   }
 
   if (selectedFiles.length > 1) {
@@ -885,14 +995,17 @@ async function startTransfer() {
   }
 
   transferring = false;
+  activeFileIndex = -1;
   document.getElementById('sendBtn').disabled = false;
   document.getElementById('progressSection').classList.add('complete');
   log(`[SYS] Transfer complete: ${ok} OK, ${fail} FAIL`, fail > 0 ? 'error' : 'success');
+  renderQueue();
 }
 
 async function sendFile(file, index) {
+  if (fileStatuses[index]) fileStatuses[index].itemClass = 'active';
   const el = document.getElementById(`file-${index}`);
-  el.classList.add('active');
+  if (el) el.classList.add('active');
 
   // SINGLE-PASS: hash AND send simultaneously — no pre-hash delay!
   // This cuts transfer time by ~50% for large files.
@@ -920,7 +1033,7 @@ async function sendFile(file, index) {
     hasher.update(bytes);
 
     // Backpressure: wait if WebSocket buffer is too full
-    while (ws.bufferedAmount > CHUNK_SIZE * 4) await sleep(5);
+    while (ws.bufferedAmount > CHUNK_SIZE * 8) await sleep(5);
 
     // Send the chunk
     ws.send(buffer);
@@ -945,12 +1058,20 @@ async function sendFile(file, index) {
   if (ack && ack.success) {
     setFileProgress(index, 100);
     setFileStatus(index, 'done', '✓ VERIFIED');
-    el.classList.remove('active');
-    el.classList.add('completed');
+    if (fileStatuses[index]) fileStatuses[index].itemClass = 'completed';
+    const activeEl = document.getElementById(`file-${index}`);
+    if (activeEl) {
+      activeEl.classList.remove('active');
+      activeEl.classList.add('completed');
+    }
     log(`[OK] ${file.name} delivered (${formatBytes(file.size)})`, 'success');
   } else {
-    el.classList.remove('active');
-    el.classList.add('failed');
+    if (fileStatuses[index]) fileStatuses[index].itemClass = 'failed';
+    const activeEl = document.getElementById(`file-${index}`);
+    if (activeEl) {
+      activeEl.classList.remove('active');
+      activeEl.classList.add('failed');
+    }
     throw new Error(ack ? (ack.error || 'Rejected') : 'ACK timeout');
   }
 }
@@ -1074,11 +1195,16 @@ function setStatus(type, text) {
 }
 
 function setFileProgress(i, pct) {
+  if (fileStatuses[i]) fileStatuses[i].pct = pct;
   const el = document.getElementById(`fileProg-${i}`);
   if (el) el.style.width = `${pct}%`;
 }
 
 function setFileStatus(i, cls, text) {
+  if (fileStatuses[i]) {
+    fileStatuses[i].class = cls;
+    fileStatuses[i].statusText = text;
+  }
   const el = document.getElementById(`fileStatus-${i}`);
   if (el) { el.className = `file-status ${cls}`; el.textContent = text; }
 }

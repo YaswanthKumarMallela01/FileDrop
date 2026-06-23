@@ -1,7 +1,7 @@
 //! TUI rendering — Hacker-themed Ratatui widget composition.
 //!
 //! ╔═══════════════════════════════════════════════════╗
-//! ║  [FILEDROP] v0.4.0  ::  RECEIVE_MODE  ::  ONLINE   ║
+//! ║  [FILEDROP] v0.5.0  ::  RECEIVE_MODE  ::  ONLINE   ║
 //! ╠═════════════════════╤═════════════════════════════╣
 //! ║  [ TRANSFER QUEUE ] │  [ SYSTEM LOG ]             ║
 //! ║  ─────────────────  │  ───────────────            ║
@@ -18,7 +18,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Sparkline},
+    widgets::{Block, BorderType, Borders, Gauge, List, ListItem, Paragraph, Sparkline},
     Frame,
 };
 
@@ -88,7 +88,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
             Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
         ),
         Span::styled("] ", Style::default().fg(MUTED)),
-        Span::styled("v0.4.0 ", Style::default().fg(TEXT_DIM)),
+        Span::styled("v0.5.0 ", Style::default().fg(TEXT_DIM)),
         Span::styled(" :: ", Style::default().fg(MUTED)),
         Span::styled(
             mode_text,
@@ -138,6 +138,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
     let header = Paragraph::new(header_line).block(
         Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(BORDER_ACTIVE))
             .style(Style::default()),
     );
@@ -148,15 +149,19 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
 // ── Middle Content (File Queue + Log + File Browser) ────────────────────────
 
 fn render_middle(frame: &mut Frame, area: Rect, app: &AppState) {
-    if app.file_browser.is_some() {
-        // Three-pane layout: Queue | Log | File Browser
+    if app.file_browser.is_some() || !app.file_queue.is_empty() {
+        // Three-pane layout: Queue | Log | File Browser / Received Files
+        let pct0 = app.current_percentages[0].round() as u16;
+        let pct1 = app.current_percentages[1].round() as u16;
+        let pct2 = 100u16.saturating_sub(pct0).saturating_sub(pct1);
+        let constraints = [
+            Constraint::Percentage(pct0),
+            Constraint::Percentage(pct1),
+            Constraint::Percentage(pct2),
+        ];
         let middle_layout = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(30),
-                Constraint::Percentage(40),
-                Constraint::Percentage(30),
-            ])
+            .constraints(constraints)
             .split(area);
 
         render_file_queue(frame, middle_layout[0], app);
@@ -164,9 +169,15 @@ fn render_middle(frame: &mut Frame, area: Rect, app: &AppState) {
         render_file_browser(frame, middle_layout[2], app);
     } else {
         // Two-pane layout: Queue | Log
+        let pct0 = app.current_percentages[0].round() as u16;
+        let pct1 = 100u16.saturating_sub(pct0);
+        let constraints = [
+            Constraint::Percentage(pct0),
+            Constraint::Percentage(pct1),
+        ];
         let middle_layout = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+            .constraints(constraints)
             .split(area);
 
         render_file_queue(frame, middle_layout[0], app);
@@ -279,6 +290,7 @@ fn render_file_queue(frame: &mut Frame, area: Rect, app: &AppState) {
             Style::default().fg(GREEN).bold(),
         ))
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(if is_focused { BORDER_ACTIVE } else { BORDER }));
 
     let list = list.block(block);
@@ -343,13 +355,15 @@ fn render_transfer_log(frame: &mut Frame, area: Rect, app: &AppState) {
         " [ SYSTEM LOG ] ".to_string()
     };
 
+    let is_focused = app.focus == FocusPane::SystemLog;
     let block = Block::default()
         .title(Span::styled(
             log_title,
             Style::default().fg(GREEN).bold(),
         ))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(BORDER));
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(if is_focused { BORDER_ACTIVE } else { BORDER }));
 
     let list = list.block(block);
     frame.render_widget(list, area);
@@ -360,7 +374,58 @@ fn render_transfer_log(frame: &mut Frame, area: Rect, app: &AppState) {
 fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
     let fb = match &app.file_browser {
         Some(fb) => fb,
-        None => return,
+        None => {
+            if app.file_queue.is_empty() {
+                return;
+            }
+            let inner_height = area.height.saturating_sub(3) as usize; // borders + title
+            let list_items: Vec<ListItem> = app.file_queue
+                .iter()
+                .map(|file| {
+                    let mark = match &file.status {
+                        TransferStatus::Completed => "✓ ",
+                        TransferStatus::InProgress => "▶ ",
+                        TransferStatus::Failed(_) => "✗ ",
+                        TransferStatus::Cancelled => "- ",
+                        TransferStatus::Queued => "  ",
+                    };
+                    let style = match &file.status {
+                        TransferStatus::Completed => Style::default().fg(GREEN_DIM),
+                        TransferStatus::InProgress => Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+                        _ => Style::default().fg(TEXT_PRIMARY),
+                    };
+                    let line = Line::from(vec![
+                        Span::styled(mark, style),
+                        Span::styled(&file.name, style),
+                        Span::styled("  ", Style::default()),
+                        Span::styled(protocol::format_bytes(file.size), Style::default().fg(MUTED)),
+                    ]);
+                    ListItem::new(line)
+                })
+                .collect();
+
+            let visible: Vec<ListItem> = list_items.into_iter().take(inner_height).collect();
+            let list = if visible.is_empty() {
+                List::new(vec![ListItem::new(Line::from(vec![Span::styled(
+                    "  // Empty directory",
+                    Style::default().fg(TEXT_DIM),
+                )]))])
+            } else {
+                List::new(visible)
+            };
+
+            let title = " [ RECEIVED FILES ] ";
+            let is_focused = app.focus == FocusPane::FileBrowser;
+            let block = Block::default()
+                .title(Span::styled(title, Style::default().fg(if is_focused { GREEN } else { TEXT_DIM }).bold()))
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(if is_focused { BORDER_ACTIVE } else { BORDER }));
+
+            let list = list.block(block);
+            frame.render_widget(list, area);
+            return;
+        }
     };
 
     let inner_height = area.height.saturating_sub(3) as usize; // borders + title
@@ -424,25 +489,62 @@ fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
     let visible: Vec<ListItem> = items.into_iter().skip(start).take(inner_height).collect();
 
     let list = if visible.is_empty() {
-        List::new(vec![ListItem::new(Line::from(vec![Span::styled(
-            "  // Empty directory",
-            Style::default().fg(TEXT_DIM),
-        )]))])
+        if !app.file_queue.is_empty() {
+            let list_items: Vec<ListItem> = app.file_queue
+                .iter()
+                .map(|file| {
+                    let mark = match &file.status {
+                        TransferStatus::Completed => "✓ ",
+                        TransferStatus::InProgress => "▶ ",
+                        TransferStatus::Failed(_) => "✗ ",
+                        TransferStatus::Cancelled => "- ",
+                        TransferStatus::Queued => "  ",
+                    };
+                    let style = match &file.status {
+                        TransferStatus::Completed => Style::default().fg(GREEN_DIM),
+                        TransferStatus::InProgress => Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+                        _ => Style::default().fg(TEXT_PRIMARY),
+                    };
+                    let line = Line::from(vec![
+                        Span::styled(mark, style),
+                        Span::styled(&file.name, style),
+                        Span::styled("  ", Style::default()),
+                        Span::styled(protocol::format_bytes(file.size), Style::default().fg(MUTED)),
+                    ]);
+                    ListItem::new(line)
+                })
+                .collect();
+            List::new(list_items)
+        } else {
+            List::new(vec![ListItem::new(Line::from(vec![Span::styled(
+                "  // Empty directory",
+                Style::default().fg(TEXT_DIM),
+            )]))])
+        }
     } else {
         List::new(visible)
     };
 
     // Build title with path + selection count
-    let path_display = fb.current_path.file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| fb.current_path.display().to_string());
+    let selection_part = if fb.selected_count() > 0 {
+        format!(" ({} sel, {})", fb.selected_count(), protocol::format_bytes(fb.selected_size()))
+    } else {
+        String::new()
+    };
+
+    let max_path_width = (area.width as usize).saturating_sub(6 + selection_part.len() + 2);
+    let path_str = fb.current_path.to_string_lossy().replace('\\', "/");
+    let path_display = if path_str.chars().count() > max_path_width && max_path_width > 3 {
+        let chars_to_keep = max_path_width - 3;
+        let skip_chars = path_str.chars().count() - chars_to_keep;
+        let truncated: String = path_str.chars().skip(skip_chars).collect();
+        format!("...{}", truncated)
+    } else {
+        path_str
+    };
 
     let title = if fb.selected_count() > 0 {
-        format!(" [ {} ] ({} sel, {}) ",
-            path_display,
-            fb.selected_count(),
-            protocol::format_bytes(fb.selected_size()),
-        )
+        format!(" [ {} ]{} ", path_display, selection_part)
     } else {
         format!(" [ {} ] ", path_display)
     };
@@ -451,6 +553,7 @@ fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
     let block = Block::default()
         .title(Span::styled(title, Style::default().fg(if is_focused { GREEN } else { TEXT_DIM }).bold()))
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(if is_focused { BORDER_ACTIVE } else { BORDER }));
 
     let list = list.block(block);
@@ -530,6 +633,7 @@ fn render_progress_bar(frame: &mut Frame, area: Rect, app: &AppState) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(if percentage >= 100 { GREEN } else { BORDER }))
                 .title(Span::styled(files_str, Style::default().fg(GREEN_DIM)))
         )
@@ -630,7 +734,8 @@ pub fn render_mode_selection(frame: &mut Frame, selected: usize) {
         Line::from(vec![
             Span::styled("  [", Style::default().fg(MUTED)),
             Span::styled("FILEDROP", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
-            Span::styled("]  ", Style::default().fg(MUTED)),
+            Span::styled("] ", Style::default().fg(MUTED)),
+            Span::styled("v0.5.0 ", Style::default().fg(TEXT_DIM)),
             Span::styled("Connection Setup", Style::default().fg(TEXT_PRIMARY)),
         ]),
         Line::from(""),
@@ -693,6 +798,7 @@ pub fn render_mode_selection(frame: &mut Frame, selected: usize) {
 
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(BORDER_ACTIVE))
         .title(Span::styled(
             " [ CONNECTION MODE ] ",
@@ -791,6 +897,7 @@ pub fn render_hotspot_guide(frame: &mut Frame, os: &str) {
 
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(WARNING_AMBER))
         .title(Span::styled(
             " [ HOTSPOT SETUP ] ",

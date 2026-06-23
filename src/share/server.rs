@@ -32,7 +32,7 @@ use tokio::sync::Notify;
 const SHARE_PORT: u16 = 7879;
 
 /// Chunk size for streaming file content to HTTP clients.
-const STREAM_CHUNK_SIZE: usize = 256 * 1024; // 256 KB
+const STREAM_CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4 MB
 
 /// Cookie name used for PIN-authenticated sessions.
 const PIN_COOKIE_NAME: &str = "filedrop_pin_auth";
@@ -617,7 +617,7 @@ fn print_terminal_summary(
 
     println!();
     println!("  \x1b[32m╔══════════════════════════════════════════════════════════════╗\x1b[0m");
-    println!("  \x1b[32m║\x1b[0m  \x1b[1;32mFileDrop v0.4.0 — EPHEMERAL SHARE\x1b[0m                           \x1b[32m║\x1b[0m");
+    println!("  \x1b[32m║\x1b[0m  \x1b[1;32mFileDrop v0.5.0 — EPHEMERAL SHARE\x1b[0m                           \x1b[32m║\x1b[0m");
     println!("  \x1b[32m╠══════════════════════════════════════════════════════════════╣\x1b[0m");
     println!("  \x1b[32m║\x1b[0m  File    : \x1b[1;32m{:<49}\x1b[0m\x1b[32m║\x1b[0m", file_name);
     println!("  \x1b[32m║\x1b[0m  Size    : {:<49}\x1b[32m║\x1b[0m", size_display);
@@ -748,7 +748,7 @@ fn html_download_page(file_name: &str, file_size: u64, sha256: &str, token: &str
 </head>
 <body>
 <div class="card">
-  <h1>[FILEDROP] v0.4.0 :: RECEIVE_MODE</h1>
+  <h1>[FILEDROP] v0.5.0 :: RECEIVE_MODE</h1>
   <div class="meta" style="margin-top: 1.5rem;">
     <div>File: <span>{file_name}</span></div>
     <div>Size: <span>{size_display}</span></div>

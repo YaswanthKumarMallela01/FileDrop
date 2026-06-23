@@ -101,6 +101,7 @@ pub enum LogLevel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FocusPane {
     TransferQueue,
+    SystemLog,
     FileBrowser,
 }
 
@@ -230,12 +231,18 @@ pub struct AppState {
     // ── Feature 7: Encryption ───────────────────────────────────
     /// Whether E2E encryption is enabled
     pub encrypt_enabled: bool,
+
+    // ── Smooth Layout Transitions ───────────────────────────────
+    /// Current percentages for the middle panels
+    pub current_percentages: [f32; 3],
+    /// Target percentages for the middle panels
+    pub target_percentages: [f32; 3],
 }
 
 impl AppState {
     /// Create a new application state
     pub fn new(mode: AppMode) -> Self {
-        Self {
+        let mut app = Self {
             mode,
             status: ConnectionStatus::Ready,
             file_queue: Vec::new(),
@@ -257,7 +264,11 @@ impl AppState {
             push_tx: None,
             hotspot_mode: false,
             encrypt_enabled: false,
-        }
+            current_percentages: [50.0, 25.0, 25.0],
+            target_percentages: [50.0, 25.0, 25.0],
+        };
+        app.init_file_browser();
+        app
     }
 
     /// Add a log entry with the current timestamp
@@ -353,6 +364,34 @@ impl AppState {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         self.file_browser = Some(FileBrowserState::new(cwd));
         self.log("[BROWSER] File browser activated — press Tab to switch focus".to_string(), LogLevel::Info);
+    }
+
+    /// Update pane size interpolation for smooth macOS/MacBook-like sliding transitions
+    pub fn update_layout_interpolation(&mut self) {
+        let is_three_pane = self.file_browser.is_some() || !self.file_queue.is_empty();
+
+        if is_three_pane {
+            self.target_percentages = match self.focus {
+                FocusPane::TransferQueue => [50.0, 25.0, 25.0],
+                FocusPane::SystemLog => [25.0, 50.0, 25.0],
+                FocusPane::FileBrowser => [25.0, 25.0, 50.0],
+            };
+        } else {
+            self.target_percentages = match self.focus {
+                FocusPane::TransferQueue => [60.0, 40.0, 0.0],
+                _ => [40.0, 60.0, 0.0],
+            };
+        }
+
+        // Linear interpolation: current += (target - current) * 0.20
+        for i in 0..3 {
+            let diff = self.target_percentages[i] - self.current_percentages[i];
+            if diff.abs() > 0.05 {
+                self.current_percentages[i] += diff * 0.20;
+            } else {
+                self.current_percentages[i] = self.target_percentages[i];
+            }
+        }
     }
 
     /// Handle file browser key events (Feature 2A)
@@ -499,9 +538,7 @@ impl AppState {
                     self.status = ConnectionStatus::Ready;
                 }
                 self.log(format!("{} disconnected", name), LogLevel::Info);
-                // Close file browser
-                self.file_browser = None;
-                self.focus = FocusPane::TransferQueue;
+                // Do NOT close file browser, let the third panel persist!
             }
             ServerEvent::FileStarted { file } => {
                 self.add_file(file);
@@ -861,7 +898,7 @@ pub async fn run_receive(
             println!();
         }
         println!("  \x1b[32m╔══════════════════════════════════════════════════════╗\x1b[0m");
-        println!("  \x1b[32m║\x1b[0m  \x1b[1;32m[FILEDROP]\x1b[0m  v0.4.0  ::  RECEIVE_MODE              \x1b[32m║\x1b[0m");
+        println!("  \x1b[32m║\x1b[0m  \x1b[1;32m[FILEDROP]\x1b[0m  v0.5.0  ::  RECEIVE_MODE              \x1b[32m║\x1b[0m");
         println!("  \x1b[32m╠══════════════════════════════════════════════════════╣\x1b[0m");
         println!("  \x1b[32m║\x1b[0m                                                      \x1b[32m║\x1b[0m");
         println!("  \x1b[32m║\x1b[0m  \x1b[1;32m> SCAN QR CODE ON PHONE TO CONNECT:\x1b[0m                 \x1b[32m║\x1b[0m");
@@ -991,7 +1028,7 @@ async fn run_tui(
 
     // Initial log
     app.log(
-        format!("FileDrop v0.4.0 — {}", mode),
+        format!("FileDrop v0.5.0 — {}", mode),
         LogLevel::Info,
     );
 
@@ -1030,10 +1067,13 @@ async fn run_tui(
         events::poll_keyboard_events(kb_tx).await;
     });
 
-    // Main event loop with 100ms tick rate
-    let tick_rate = Duration::from_millis(100);
+    // Main event loop with 30ms tick rate for smooth MacBook-like transitions
+    let tick_rate = Duration::from_millis(30);
 
     loop {
+        // Update layout size interpolation
+        app.update_layout_interpolation();
+
         // ── DRAW ──────────────────────────────────────────────────
         terminal.draw(|frame| {
             ui::render(frame, &app);
@@ -1049,13 +1089,18 @@ async fn run_tui(
                 match event {
                     AppEvent::Quit => app.should_quit = true,
                     AppEvent::TabFocus => {
-                        // Toggle focus between transfer queue and file browser
-                        if app.file_browser.is_some() {
-                            app.focus = match app.focus {
-                                FocusPane::TransferQueue => FocusPane::FileBrowser,
-                                FocusPane::FileBrowser => FocusPane::TransferQueue,
-                            };
-                        }
+                        // Cycle focus through the panes
+                        app.focus = match app.focus {
+                            FocusPane::TransferQueue => FocusPane::SystemLog,
+                            FocusPane::SystemLog => {
+                                if app.file_browser.is_some() {
+                                    FocusPane::FileBrowser
+                                } else {
+                                    FocusPane::TransferQueue
+                                }
+                            }
+                            FocusPane::FileBrowser => FocusPane::TransferQueue,
+                        };
                     }
                     // File browser events (when focused)
                     ref evt @ (AppEvent::Enter | AppEvent::GoBack | AppEvent::ToggleSelect |
@@ -1068,11 +1113,19 @@ async fn run_tui(
                     AppEvent::ScrollUp if app.focus == FocusPane::FileBrowser => {
                         app.handle_file_browser_event(&AppEvent::ScrollUp);
                     }
-                    AppEvent::ScrollDown if app.focus == FocusPane::FileBrowser => {
-                        app.handle_file_browser_event(&AppEvent::ScrollDown);
+                    AppEvent::ScrollUp if app.focus == FocusPane::SystemLog => {
+                        app.log_scroll = app.log_scroll.saturating_sub(1);
                     }
                     AppEvent::ScrollUp => {
                         app.queue_scroll = app.queue_scroll.saturating_sub(1);
+                    }
+                    AppEvent::ScrollDown if app.focus == FocusPane::FileBrowser => {
+                        app.handle_file_browser_event(&AppEvent::ScrollDown);
+                    }
+                    AppEvent::ScrollDown if app.focus == FocusPane::SystemLog => {
+                        app.log_scroll = app.log_scroll
+                            .saturating_add(1)
+                            .min(app.log_entries.len().saturating_sub(1));
                     }
                     AppEvent::ScrollDown => {
                         app.queue_scroll = app.queue_scroll
@@ -1084,6 +1137,8 @@ async fn run_tui(
                             if let Some(ref mut fb) = app.file_browser {
                                 fb.cursor = 0;
                             }
+                        } else if app.focus == FocusPane::SystemLog {
+                            app.log_scroll = 0;
                         } else {
                             app.queue_scroll = 0;
                         }
@@ -1093,6 +1148,8 @@ async fn run_tui(
                             if let Some(ref mut fb) = app.file_browser {
                                 fb.cursor = fb.entries.len().saturating_sub(1);
                             }
+                        } else if app.focus == FocusPane::SystemLog {
+                            app.log_scroll = app.log_entries.len().saturating_sub(1);
                         } else {
                             app.queue_scroll = app.file_queue.len().saturating_sub(1);
                         }

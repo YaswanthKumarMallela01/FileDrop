@@ -120,7 +120,7 @@ pub async fn start_server(
         .route("/ws", get(ws_handler))
         .route(
             "/health",
-            get(|| async { "FileDrop v0.4.0 OK" }),
+            get(|| async { "FileDrop v0.5.0 OK" }),
         )
         // Serve the embedded web UI for phone browsers
         .route("/", get(crate::web::serve_index))
@@ -140,12 +140,38 @@ pub async fn start_server(
     });
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await?;
+    let make_service = app.into_make_service_with_connect_info::<SocketAddr>();
+    loop {
+        let (stream, remote_addr) = match listener.accept().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                let _ = event_tx.send(ServerEvent::Error {
+                    message: format!("Accept error: {}", e),
+                });
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                continue;
+            }
+        };
+        let _ = stream.set_nodelay(true);
+        let make_service = make_service.clone();
+        tokio::spawn(async move {
+            use tower::Service;
+            let io = hyper_util::rt::TokioIo::new(stream);
+            // Get the service for this connection
+            let mut service_maker = make_service;
+            let service = match service_maker.call(remote_addr).await {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+            let hyper_service = hyper_util::service::TowerToHyperService::new(service);
+            let conn = hyper::server::conn::http1::Builder::new()
+                .serve_connection(io, hyper_service);
+            let conn = conn.with_upgrades();
+            let _ = conn.await;
+        });
+    }
 
+    #[allow(unreachable_code)]
     Ok(())
 }
 
@@ -173,6 +199,12 @@ async fn ws_handler(
             }
         }
     }
+
+    let ws = ws
+        .max_frame_size(4 * 1024 * 1024)
+        .max_message_size(64 * 1024 * 1024)
+        .write_buffer_size(4 * 1024 * 1024)
+        .max_write_buffer_size(8 * 1024 * 1024);
 
     ws.on_upgrade(move |socket| handle_connection(socket, state, peer_addr))
         .into_response()

@@ -15,7 +15,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
     Frame, Terminal,
 };
 use std::collections::HashSet;
@@ -487,7 +487,7 @@ fn render_configurator(
         Span::styled("  [", Style::default().fg(MUTED)),
         Span::styled("FILEDROP", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
         Span::styled("] ", Style::default().fg(MUTED)),
-        Span::styled("v0.4.0 ", Style::default().fg(TEXT_DIM)),
+        Span::styled("v0.5.0 ", Style::default().fg(TEXT_DIM)),
         Span::styled(" :: ", Style::default().fg(MUTED)),
         Span::styled("EPHEMERAL SHARE CONFIGURATOR", Style::default().fg(GREEN_BRIGHT)),
         Span::styled(" :: ", Style::default().fg(MUTED)),
@@ -496,6 +496,7 @@ fn render_configurator(
     let header = Paragraph::new(Line::from(header_spans)).block(
         Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(GREEN)),
     );
     frame.render_widget(header, main_layout[0]);
@@ -581,6 +582,7 @@ fn render_configurator(
     let file_list = List::new(file_items).block(
         Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(file_border_style)
             .title(Span::styled(file_title, Style::default().fg(GREEN).bold())),
     );
@@ -599,6 +601,7 @@ fn render_configurator(
 
     let config_block = Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(config_border_style)
         .title(Span::styled(config_title, Style::default().fg(GREEN).bold()));
 
@@ -728,6 +731,7 @@ fn render_configurator(
     let footer = Paragraph::new(footer_text).block(
         Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(BORDER_INACTIVE))
             .title(Span::styled(" [ HELPBINDS ] ", Style::default().fg(TEXT_DIM))),
     );

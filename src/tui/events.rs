@@ -3,7 +3,7 @@
 //! Supports multiple screen contexts: main TUI, mode selection,
 //! hotspot guide, and file browser.
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use tokio::sync::mpsc;
 
 /// Application events triggered by user input
@@ -111,6 +111,9 @@ pub async fn poll_keyboard_events(tx: mpsc::UnboundedSender<AppEvent>) {
 /// This mapping covers ALL contexts. The app state machine decides
 /// which events are relevant based on the current screen/focus.
 fn map_key_event(key: KeyEvent) -> Option<AppEvent> {
+    if key.kind == KeyEventKind::Release {
+        return None;
+    }
     match key.code {
         // ── Universal ───────────────────────────────────────────
         KeyCode::Char('q') | KeyCode::Char('Q') => Some(AppEvent::Quit),

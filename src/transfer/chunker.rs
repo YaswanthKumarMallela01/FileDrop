@@ -11,8 +11,8 @@ use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 
-/// Default chunk size: 256KB
-pub const DEFAULT_CHUNK_SIZE: usize = 256 * 1024;
+/// Default chunk size: 4MB
+pub const DEFAULT_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
 /// Chunker errors
 #[derive(Error, Debug)]
