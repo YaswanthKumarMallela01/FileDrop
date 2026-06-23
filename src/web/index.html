@@ -949,12 +949,16 @@ fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInpu
 function addFiles(fileList) {
   if (!fileList || fileList.length === 0) return;
 
+  // Convert FileList to a plain JavaScript Array synchronously
+  // to prevent the browser from clearing/invalidating the files on event end.
+  const filesArray = Array.from(fileList);
+  const count = filesArray.length;
   const overlay = document.getElementById('processingOverlay');
-  const count = fileList.length;
 
   if (count < 100) {
     for (let i = 0; i < count; i++) {
-      const file = fileList[i];
+      const file = filesArray[i];
+      if (!file) continue;
       const key = `${file.name}::${file.size}`;
       if (selectedFileKeys.has(key)) continue;
       selectedFileKeys.add(key);
@@ -972,30 +976,39 @@ function addFiles(fileList) {
   }
 
   let index = 0;
-  const batchSize = 200;
+  const batchSize = 500;
 
   function processBatch() {
-    const end = Math.min(index + batchSize, count);
-    for (let i = index; i < end; i++) {
-      const file = fileList[i];
-      const key = `${file.name}::${file.size}`;
-      if (selectedFileKeys.has(key)) continue;
-      selectedFileKeys.add(key);
-      selectedFiles.push(file);
-      fileStatuses.push({ statusText: 'QUEUED', class: '', pct: 0, itemClass: '' });
-    }
+    try {
+      const end = Math.min(index + batchSize, count);
+      for (let i = index; i < end; i++) {
+        const file = filesArray[i];
+        if (!file) continue;
+        const key = `${file.name}::${file.size}`;
+        if (selectedFileKeys.has(key)) continue;
+        selectedFileKeys.add(key);
+        selectedFiles.push(file);
+        fileStatuses.push({ statusText: 'QUEUED', class: '', pct: 0, itemClass: '' });
+      }
 
-    index = end;
+      index = end;
 
-    if (overlay) {
-      const pct = Math.round((index / count) * 100);
-      document.getElementById('processingCount').textContent = `${index} / ${count}`;
-      document.getElementById('processingBar').style.width = `${pct}%`;
-    }
+      if (overlay) {
+        const pct = Math.round((index / count) * 100);
+        document.getElementById('processingCount').textContent = `${index} / ${count}`;
+        document.getElementById('processingBar').style.width = `${pct}%`;
+      }
 
-    if (index < count) {
-      setTimeout(processBatch, 0);
-    } else {
+      if (index < count) {
+        setTimeout(processBatch, 0);
+      } else {
+        if (overlay) {
+          overlay.classList.remove('visible');
+        }
+        renderQueue();
+      }
+    } catch (err) {
+      console.error("Error processing selection batch:", err);
       if (overlay) {
         overlay.classList.remove('visible');
       }
