@@ -118,6 +118,13 @@
     letter-spacing: 1px;
     text-transform: uppercase;
     transition: all 0.3s ease;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .status-pill:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #fff;
   }
 
   .status-pill.connecting {
@@ -142,9 +149,67 @@
     animation: blink 1s step-end infinite;
   }
 
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
+  /* ── Processing Overlay ────────────────────────────── */
+  .processing-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10, 10, 10, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .processing-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .processing-card {
+    background: rgba(18, 18, 18, 0.8);
+    border: 1px solid var(--green);
+    border-radius: 8px;
+    padding: 24px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+    text-align: center;
+    font-family: monospace;
+  }
+  .processing-title {
+    color: var(--green);
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  .processing-stats {
+    color: #fff;
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 16px;
+  }
+  .processing-bar-container {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .processing-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green-glow);
+    transition: width 0.1s ease;
+  }
+  .processing-subtitle {
+    color: var(--muted);
+    font-size: 11px;
   }
 
   /* ── Content ──────────────────────────────────────── */
@@ -642,17 +707,29 @@
 <!-- Matrix Rain Background -->
 <canvas id="matrix"></canvas>
 
+<!-- Processing Overlay -->
+<div id="processingOverlay" class="processing-overlay">
+  <div class="processing-card">
+    <div class="processing-title">Indexing Files...</div>
+    <div class="processing-stats" id="processingCount">0 / 0</div>
+    <div class="processing-bar-container">
+      <div id="processingBar" class="processing-bar-fill"></div>
+    </div>
+    <div class="processing-subtitle">// preparing high-speed secure tunnel</div>
+  </div>
+</div>
+
 <!-- Header -->
 <div class="header">
   <div class="logo">
     <span class="logo-bracket">[</span>
     <span class="logo-text">FileDrop</span>
     <span class="logo-bracket">]</span>
-    <span class="logo-ver">v0.5.0</span>
+    <span class="logo-ver">v0.5.2</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <button id="installBtn" class="install-btn" onclick="installPWA()">⬇ Install</button>
-    <div id="statusPill" class="status-pill connecting">
+    <div id="statusPill" class="status-pill connecting" onclick="manualReconnect()">
       <div class="status-dot"></div>
       <span id="statusText">Link...</span>
     </div>
@@ -719,7 +796,7 @@
 </div>
 
 <div class="footer">
-  FileDrop v0.5.0 // encrypted local transfer // no cloud // no trace
+  FileDrop v0.5.2 // encrypted local transfer // no cloud // no trace
 </div>
 
 <script>
@@ -733,11 +810,13 @@ const HASH_CHUNK_SIZE = 2*1024*1024; // 2MB hash chunks (streaming)
 let ws = null;
 let selectedFiles = [];
 let fileStatuses = [];
+let selectedFileKeys = new Set();
 let activeFileIndex = -1;
 let transferring = false;
 let totalBytes = 0;
 let totalSent = 0;
 let transferStart = 0;
+let reconnectTimer = null;
 
 // ── Matrix Rain ───────────────────────────────────────────
 (function initMatrix() {
@@ -762,11 +841,47 @@ let transferStart = 0;
   }
   setInterval(draw, 50);
   window.addEventListener('resize', () => { c.width = innerWidth; c.height = innerHeight; });
+  window.addEventListener('orientationchange', () => { setTimeout(() => { c.width = innerWidth; c.height = innerHeight; }, 100); });
 })();
 
 // ── WebSocket Connection ──────────────────────────────────
 
+function scheduleReconnect() {
+  if (transferring) return;
+  if (reconnectTimer) return;
+  log('[SYS] Reconnecting in 3 seconds...', 'info');
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect();
+  }, 3000);
+}
+
+function manualReconnect() {
+  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+    log('[SYS] Connection already active or establishing', 'info');
+    return;
+  }
+  log('[SYS] Manual reconnection triggered...', 'system');
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  connect();
+}
+
 function connect() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  if (ws) {
+    ws.onopen = null;
+    ws.onclose = null;
+    ws.onerror = null;
+    ws.onmessage = null;
+    try { ws.close(); } catch(e) {}
+  }
+
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${proto}//${location.host}/ws`;
   setStatus('connecting', 'LINK...');
@@ -783,12 +898,14 @@ function connect() {
   ws.onclose = () => {
     setStatus('disconnected', 'OFFLINE');
     log('[SYS] Connection terminated', 'info');
-    if (!transferring) setTimeout(connect, 3000);
+    scheduleReconnect();
   };
 
   ws.onerror = () => {
     setStatus('disconnected', 'ERROR');
     log('[ERR] WebSocket failure', 'error');
+    try { ws.close(); } catch(e) {}
+    scheduleReconnect();
   };
 
   ws.onmessage = (event) => {
@@ -830,18 +947,70 @@ dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classLis
 fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
 
 function addFiles(fileList) {
-  for (const file of fileList) {
-    if (selectedFiles.find(f => f.name === file.name && f.size === file.size)) continue;
-    selectedFiles.push(file);
-    fileStatuses.push({ statusText: 'QUEUED', class: '', pct: 0, itemClass: '' });
+  if (!fileList || fileList.length === 0) return;
+
+  const overlay = document.getElementById('processingOverlay');
+  const count = fileList.length;
+
+  if (count < 100) {
+    for (let i = 0; i < count; i++) {
+      const file = fileList[i];
+      const key = `${file.name}::${file.size}`;
+      if (selectedFileKeys.has(key)) continue;
+      selectedFileKeys.add(key);
+      selectedFiles.push(file);
+      fileStatuses.push({ statusText: 'QUEUED', class: '', pct: 0, itemClass: '' });
+    }
+    renderQueue();
+    return;
   }
-  renderQueue();
+
+  if (overlay) {
+    overlay.classList.add('visible');
+    document.getElementById('processingCount').textContent = `0 / ${count}`;
+    document.getElementById('processingBar').style.width = '0%';
+  }
+
+  let index = 0;
+  const batchSize = 200;
+
+  function processBatch() {
+    const end = Math.min(index + batchSize, count);
+    for (let i = index; i < end; i++) {
+      const file = fileList[i];
+      const key = `${file.name}::${file.size}`;
+      if (selectedFileKeys.has(key)) continue;
+      selectedFileKeys.add(key);
+      selectedFiles.push(file);
+      fileStatuses.push({ statusText: 'QUEUED', class: '', pct: 0, itemClass: '' });
+    }
+
+    index = end;
+
+    if (overlay) {
+      const pct = Math.round((index / count) * 100);
+      document.getElementById('processingCount').textContent = `${index} / ${count}`;
+      document.getElementById('processingBar').style.width = `${pct}%`;
+    }
+
+    if (index < count) {
+      setTimeout(processBatch, 0);
+    } else {
+      if (overlay) {
+        overlay.classList.remove('visible');
+      }
+      renderQueue();
+    }
+  }
+
+  processBatch();
 }
 
 function clearFiles() {
   if (transferring) return;
   selectedFiles = [];
   fileStatuses = [];
+  selectedFileKeys.clear();
   activeFileIndex = -1;
   document.querySelector('.content').classList.remove('transfer-active');
   document.getElementById('progressSection').classList.remove('visible');

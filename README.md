@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.5.0-00e87b?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.2-00e87b?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/RUST-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/WebSocket-010101?style=for-the-badge&logo=socketdotio&logoColor=00FF41" alt="WebSocket">
   <img src="https://img.shields.io/badge/TUI-Terminal-00FF41?style=for-the-badge" alt="TUI">
@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/YaswanthKumarMallela01/FileDrop/releases/tag/v0.5.0"><b>📦 Download v0.5.0</b></a> &nbsp;·&nbsp;
+  <a href="https://github.com/YaswanthKumarMallela01/FileDrop/releases/tag/v0.5.2"><b>📦 Download v0.5.2</b></a> &nbsp;·&nbsp;
   <a href="https://yaswanthkumarmallela01.github.io/FileDrop/"><b>🌐 Website</b></a> &nbsp;·&nbsp;
   <a href="https://github.com/YaswanthKumarMallela01/FileDrop/issues"><b>🐛 Report Bug</b></a>
 </p>
@@ -50,9 +50,9 @@ No Rust or build tools needed. Download the single executable for your platform:
 
 | Platform | Download | Size |
 |----------|----------|------|
-| **Windows** | [filedrop-windows-amd64.exe](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.5.0/filedrop-windows-amd64.exe) | ~7.3 MB |
-| **Linux** | [filedrop-linux-amd64](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.5.0/filedrop-linux-amd64) | ~6.5 MB |
-| **macOS** | [filedrop-macos-amd64](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.5.0/filedrop-macos-amd64) | ~5.9 MB |
+| **Windows** | [filedrop-windows-amd64.exe](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.5.2/filedrop-windows-amd64.exe) | ~7.3 MB |
+| **Linux** | [filedrop-linux-amd64](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.5.2/filedrop-linux-amd64) | ~6.5 MB |
+| **macOS** | [filedrop-macos-amd64](https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.5.2/filedrop-macos-amd64) | ~5.9 MB |
 
 #### Windows
 1. Download and **double-click** `filedrop-windows-amd64.exe`
@@ -62,12 +62,12 @@ No Rust or build tools needed. Download the single executable for your platform:
 #### Linux / macOS
 ```bash
 # Linux
-wget https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.5.0/filedrop-linux-amd64
+wget https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.5.2/filedrop-linux-amd64
 chmod +x filedrop-linux-amd64
 sudo mv filedrop-linux-amd64 /usr/local/bin/filedrop
 
 # macOS
-curl -LO https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.5.0/filedrop-macos-amd64
+curl -LO https://github.com/YaswanthKumarMallela01/FileDrop/releases/download/v0.5.2/filedrop-macos-amd64
 chmod +x filedrop-macos-amd64
 sudo mv filedrop-macos-amd64 /usr/local/bin/filedrop
 ```
@@ -187,15 +187,23 @@ FileDrop is built with security-first design. Your files **never leave your loca
 
 ## ⚡ Performance
 
-### Speed Optimizations
+### Speed & UI Optimizations
 
-FileDrop v0.1.0 includes several optimizations for large file transfers:
+FileDrop v0.5.2 includes several advanced performance and TUI visual optimizations:
 
 | Optimization | Impact | Details |
 |-------------|--------|---------|
+| **O(1) Set Selection** | **⚡ Instant Selection** | Uses a Javascript `Set` instead of linear search, reducing selection time for 3,500+ files from 10 mins to < 5ms |
+| **Async Batching & Overlay** | **Responsive UI** | Files are indexed in background batches of 200 with a progress indicator, keeping the browser fully responsive |
+| **Click-to-Reconnect** | **Robust sessions** | A clickable status pill enables manual forced reconnections, paired with robust auto-retry connection loops |
 | **Hash-while-sending** | **~50% faster** | SHA-256 computed alongside transfer, not before |
-| **1MB chunks** | **~4x less overhead** | Reduced from 256KB to 1MB WebSocket frames |
-| **4MB write buffer** | **Fewer disk I/Os** | Buffered writes reduce syscall overhead |
+| **4MB chunks** | **🚀 50+ MB/s speeds** | Scaled from 1MB to 4MB WebSocket frames with customized axum socket limit overrides |
+| **TCP Nodelay** | **Lower latency** | Disables Nagle's algorithm (`tcp_nodelay(true)`) for high-throughput network piping |
+| **O(1) Virtual Scroll** | **No freeze delay** | Collapsed/virtual rendering on mobile displays only active + surrounding files, removing the 10-minute delay for 3500+ files |
+| **MacBook-style transitions**| **60fps animations** | Uses a 15ms high-refresh TUI event loop and linear layout interpolation to slide focused panels smoothly |
+| **Persistent 3-Pane TUI** | **Layout consistency** | File browser pane is initialized immediately on startup and remains active on peer disconnect |
+| **Line-Wrapped Panes** | **No cut-off text** | Uses dynamic paragraph word-wrapping across all panels so text is never lost when sections shrink |
+| **Curved TUI Corners** | **Premium design** | Custom rounded-corner blocks (`BorderType::Rounded`) for a modern terminal appearance |
 | **Streaming SHA-256** | **No RAM limit** | Files >10GB supported without loading into memory |
 | **Backpressure control** | **No data loss** | WebSocket buffer monitoring prevents overflow |
 

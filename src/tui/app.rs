@@ -383,11 +383,11 @@ impl AppState {
             };
         }
 
-        // Linear interpolation: current += (target - current) * 0.20
+        // Linear interpolation: current += (target - current) * 0.10
         for i in 0..3 {
             let diff = self.target_percentages[i] - self.current_percentages[i];
             if diff.abs() > 0.05 {
-                self.current_percentages[i] += diff * 0.20;
+                self.current_percentages[i] += diff * 0.10;
             } else {
                 self.current_percentages[i] = self.target_percentages[i];
             }
@@ -898,7 +898,7 @@ pub async fn run_receive(
             println!();
         }
         println!("  \x1b[32m╔══════════════════════════════════════════════════════╗\x1b[0m");
-        println!("  \x1b[32m║\x1b[0m  \x1b[1;32m[FILEDROP]\x1b[0m  v0.5.0  ::  RECEIVE_MODE              \x1b[32m║\x1b[0m");
+        println!("  \x1b[32m║\x1b[0m  \x1b[1;32m[FILEDROP]\x1b[0m  v0.5.2  ::  RECEIVE_MODE              \x1b[32m║\x1b[0m");
         println!("  \x1b[32m╠══════════════════════════════════════════════════════╣\x1b[0m");
         println!("  \x1b[32m║\x1b[0m                                                      \x1b[32m║\x1b[0m");
         println!("  \x1b[32m║\x1b[0m  \x1b[1;32m> SCAN QR CODE ON PHONE TO CONNECT:\x1b[0m                 \x1b[32m║\x1b[0m");
@@ -1028,7 +1028,7 @@ async fn run_tui(
 
     // Initial log
     app.log(
-        format!("FileDrop v0.5.0 — {}", mode),
+        format!("FileDrop v0.5.2 — {}", mode),
         LogLevel::Info,
     );
 
@@ -1067,8 +1067,8 @@ async fn run_tui(
         events::poll_keyboard_events(kb_tx).await;
     });
 
-    // Main event loop with 30ms tick rate for smooth MacBook-like transitions
-    let tick_rate = Duration::from_millis(30);
+    // Main event loop with 15ms tick rate for smooth MacBook-like transitions
+    let tick_rate = Duration::from_millis(15);
 
     loop {
         // Update layout size interpolation

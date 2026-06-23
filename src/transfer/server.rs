@@ -120,7 +120,7 @@ pub async fn start_server(
         .route("/ws", get(ws_handler))
         .route(
             "/health",
-            get(|| async { "FileDrop v0.5.0 OK" }),
+            get(|| async { "FileDrop v0.5.2 OK" }),
         )
         // Serve the embedded web UI for phone browsers
         .route("/", get(crate::web::serve_index))
@@ -562,8 +562,8 @@ async fn handle_connection(
                     let _ = socket.send(Message::Text(json.into())).await;
                 }
 
-                // Send binary chunks (1MB each)
-                let chunk_size = 1024 * 1024;
+                // Send binary chunks (4MB each)
+                let chunk_size = 4 * 1024 * 1024;
                 for chunk in push_req.data.chunks(chunk_size) {
                     let _ = socket.send(Message::Binary(chunk.to_vec().into())).await;
                 }

@@ -957,7 +957,7 @@ dependencies = [
 
 [[package]]
 name = "filedrop"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "aes-gcm",
  "anyhow",

@@ -1,7 +1,7 @@
 //! TUI rendering — Hacker-themed Ratatui widget composition.
 //!
 //! ╔═══════════════════════════════════════════════════╗
-//! ║  [FILEDROP] v0.5.0  ::  RECEIVE_MODE  ::  ONLINE   ║
+//! ║  [FILEDROP] v0.5.2  ::  RECEIVE_MODE  ::  ONLINE   ║
 //! ╠═════════════════════╤═════════════════════════════╣
 //! ║  [ TRANSFER QUEUE ] │  [ SYSTEM LOG ]             ║
 //! ║  ─────────────────  │  ───────────────            ║
@@ -18,7 +18,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Gauge, List, ListItem, Paragraph, Sparkline},
+    widgets::{Block, BorderType, Borders, Gauge, Paragraph, Sparkline, Wrap},
     Frame,
 };
 
@@ -88,7 +88,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
             Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
         ),
         Span::styled("] ", Style::default().fg(MUTED)),
-        Span::styled("v0.5.0 ", Style::default().fg(TEXT_DIM)),
+        Span::styled("v0.5.2 ", Style::default().fg(TEXT_DIM)),
         Span::styled(" :: ", Style::default().fg(MUTED)),
         Span::styled(
             mode_text,
@@ -188,7 +188,7 @@ fn render_middle(frame: &mut Frame, area: Rect, app: &AppState) {
 fn render_file_queue(frame: &mut Frame, area: Rect, app: &AppState) {
     let inner_height = area.height.saturating_sub(2) as usize; // minus borders
 
-    let items: Vec<ListItem> = app
+    let lines: Vec<Line> = app
         .file_queue
         .iter()
         .enumerate()
@@ -229,22 +229,20 @@ fn render_file_queue(frame: &mut Frame, area: Rect, app: &AppState) {
                 base_style = base_style.bg(HIGHLIGHT_BG);
             }
 
-            let line = Line::from(vec![
+            Line::from(vec![
                 Span::styled(if is_selected { "> " } else { "  " }, Style::default().fg(GREEN)),
                 Span::styled(prefix, base_style),
                 Span::styled(&file.name, base_style),
                 Span::styled("  ", Style::default()),
                 Span::styled(size, Style::default().fg(MUTED)),
                 Span::styled(progress_str, Style::default().fg(GREEN)),
-            ]);
-
-            ListItem::new(line)
+            ])
         })
         .collect();
 
-    // Apply scroll offset — show only visible items
-    let total = items.len();
-    let start = if total > inner_height {
+    // Apply scroll offset
+    let total = lines.len();
+    let scroll_y = if total > inner_height {
         // Center the cursor in the viewport
         let half = inner_height / 2;
         if app.queue_scroll < half {
@@ -256,23 +254,6 @@ fn render_file_queue(frame: &mut Frame, area: Rect, app: &AppState) {
         }
     } else {
         0
-    };
-    let end = (start + inner_height).min(total);
-    let visible: Vec<ListItem> = items.into_iter().skip(start).take(end - start).collect();
-
-    let list = if visible.is_empty() {
-        let empty_items = vec![
-            ListItem::new(Line::from(vec![
-                Span::styled("  // No targets in queue", Style::default().fg(TEXT_DIM)),
-            ])),
-            ListItem::new(Line::from(vec![Span::styled(
-                "  // Awaiting incoming stream...",
-                Style::default().fg(MUTED),
-            )])),
-        ];
-        List::new(empty_items)
-    } else {
-        List::new(visible)
     };
 
     let scroll_indicator = if total > inner_height {
@@ -293,14 +274,30 @@ fn render_file_queue(frame: &mut Frame, area: Rect, app: &AppState) {
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(if is_focused { BORDER_ACTIVE } else { BORDER }));
 
-    let list = list.block(block);
-    frame.render_widget(list, area);
+    let paragraph = if lines.is_empty() {
+        Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("  // No targets in queue", Style::default().fg(TEXT_DIM)),
+            ]),
+            Line::from(vec![Span::styled(
+                "  // Awaiting incoming stream...",
+                Style::default().fg(MUTED),
+            )]),
+        ])
+    } else {
+        Paragraph::new(lines)
+    }
+    .block(block)
+    .wrap(Wrap { trim: true })
+    .scroll((scroll_y as u16, 0));
+
+    frame.render_widget(paragraph, area);
 }
 
 fn render_transfer_log(frame: &mut Frame, area: Rect, app: &AppState) {
     let inner_height = area.height.saturating_sub(2) as usize;
 
-    let items: Vec<ListItem> = app
+    let lines: Vec<Line> = app
         .log_entries
         .iter()
         .map(|entry| {
@@ -311,25 +308,21 @@ fn render_transfer_log(frame: &mut Frame, area: Rect, app: &AppState) {
                 LogLevel::Error => (ERROR_RED, "ERR: "),
             };
 
-            let line = Line::from(vec![
+            Line::from(vec![
                 Span::styled(
                     format!("  [{}] ", entry.timestamp),
                     Style::default().fg(MUTED),
                 ),
                 Span::styled(prefix, Style::default().fg(msg_color).bold()),
                 Span::styled(&entry.message, Style::default().fg(msg_color)),
-            ]);
-
-            ListItem::new(line)
+            ])
         })
         .collect();
 
     // Apply scroll offset for log
-    let total = items.len();
-    let start = if total > inner_height {
+    let total = lines.len();
+    let scroll_y = if total > inner_height {
         let max_start = total.saturating_sub(inner_height);
-        // log_scroll == total-1 means "bottom" (auto-scroll)
-        // Moving up from bottom: log_scroll < total - 1
         if app.log_scroll >= max_start {
             max_start
         } else {
@@ -338,19 +331,9 @@ fn render_transfer_log(frame: &mut Frame, area: Rect, app: &AppState) {
     } else {
         0
     };
-    let visible: Vec<ListItem> = items.into_iter().skip(start).take(inner_height).collect();
-
-    let list = if visible.is_empty() {
-        List::new(vec![ListItem::new(Line::from(vec![Span::styled(
-            "  // Waiting for events...",
-            Style::default().fg(TEXT_DIM),
-        )]))])
-    } else {
-        List::new(visible)
-    };
 
     let log_title = if total > inner_height {
-        format!(" [ SYSTEM LOG ] ({}/{}) ", start + 1, total)
+        format!(" [ SYSTEM LOG ] ({}/{}) ", scroll_y + 1, total)
     } else {
         " [ SYSTEM LOG ] ".to_string()
     };
@@ -365,8 +348,19 @@ fn render_transfer_log(frame: &mut Frame, area: Rect, app: &AppState) {
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(if is_focused { BORDER_ACTIVE } else { BORDER }));
 
-    let list = list.block(block);
-    frame.render_widget(list, area);
+    let paragraph = if lines.is_empty() {
+        Paragraph::new(vec![Line::from(vec![Span::styled(
+            "  // Waiting for events...",
+            Style::default().fg(TEXT_DIM),
+        )])])
+    } else {
+        Paragraph::new(lines)
+    }
+    .block(block)
+    .wrap(Wrap { trim: true })
+    .scroll((scroll_y as u16, 0));
+
+    frame.render_widget(paragraph, area);
 }
 
 // ── File Browser Pane (Feature 2A) ──────────────────────────────────────────
@@ -378,8 +372,7 @@ fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
             if app.file_queue.is_empty() {
                 return;
             }
-            let inner_height = area.height.saturating_sub(3) as usize; // borders + title
-            let list_items: Vec<ListItem> = app.file_queue
+            let lines: Vec<Line> = app.file_queue
                 .iter()
                 .map(|file| {
                     let mark = match &file.status {
@@ -394,24 +387,22 @@ fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
                         TransferStatus::InProgress => Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
                         _ => Style::default().fg(TEXT_PRIMARY),
                     };
-                    let line = Line::from(vec![
+                    Line::from(vec![
                         Span::styled(mark, style),
                         Span::styled(&file.name, style),
                         Span::styled("  ", Style::default()),
                         Span::styled(protocol::format_bytes(file.size), Style::default().fg(MUTED)),
-                    ]);
-                    ListItem::new(line)
+                    ])
                 })
                 .collect();
 
-            let visible: Vec<ListItem> = list_items.into_iter().take(inner_height).collect();
-            let list = if visible.is_empty() {
-                List::new(vec![ListItem::new(Line::from(vec![Span::styled(
+            let paragraph = if lines.is_empty() {
+                Paragraph::new(vec![Line::from(vec![Span::styled(
                     "  // Empty directory",
                     Style::default().fg(TEXT_DIM),
-                )]))])
+                )])])
             } else {
-                List::new(visible)
+                Paragraph::new(lines)
             };
 
             let title = " [ RECEIVED FILES ] ";
@@ -422,15 +413,15 @@ fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
                 .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(if is_focused { BORDER_ACTIVE } else { BORDER }));
 
-            let list = list.block(block);
-            frame.render_widget(list, area);
+            let paragraph = paragraph.block(block).wrap(Wrap { trim: true });
+            frame.render_widget(paragraph, area);
             return;
         }
     };
 
     let inner_height = area.height.saturating_sub(3) as usize; // borders + title
 
-    let items: Vec<ListItem> = fb
+    let lines: Vec<Line> = fb
         .entries
         .iter()
         .enumerate()
@@ -457,7 +448,7 @@ fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
                 protocol::format_bytes(entry.size)
             };
 
-            let line = Line::from(vec![
+            Line::from(vec![
                 Span::styled(
                     if is_cursor { ">" } else { " " },
                     Style::default().fg(GREEN),
@@ -467,14 +458,12 @@ fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
                 Span::styled(&entry.name, name_style),
                 Span::styled("  ", Style::default()),
                 Span::styled(size_text, Style::default().fg(MUTED)),
-            ]);
-
-            ListItem::new(line)
+            ])
         })
         .collect();
 
     // Viewport scrolling
-    let total = items.len();
+    let total = lines.len();
     let start = if total > inner_height {
         if fb.cursor < inner_height / 2 {
             0
@@ -486,11 +475,10 @@ fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
     } else {
         0
     };
-    let visible: Vec<ListItem> = items.into_iter().skip(start).take(inner_height).collect();
 
-    let list = if visible.is_empty() {
+    let paragraph = if lines.is_empty() {
         if !app.file_queue.is_empty() {
-            let list_items: Vec<ListItem> = app.file_queue
+            let list_lines: Vec<Line> = app.file_queue
                 .iter()
                 .map(|file| {
                     let mark = match &file.status {
@@ -505,24 +493,23 @@ fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
                         TransferStatus::InProgress => Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
                         _ => Style::default().fg(TEXT_PRIMARY),
                     };
-                    let line = Line::from(vec![
+                    Line::from(vec![
                         Span::styled(mark, style),
                         Span::styled(&file.name, style),
                         Span::styled("  ", Style::default()),
                         Span::styled(protocol::format_bytes(file.size), Style::default().fg(MUTED)),
-                    ]);
-                    ListItem::new(line)
+                    ])
                 })
                 .collect();
-            List::new(list_items)
+            Paragraph::new(list_lines)
         } else {
-            List::new(vec![ListItem::new(Line::from(vec![Span::styled(
+            Paragraph::new(vec![Line::from(vec![Span::styled(
                 "  // Empty directory",
                 Style::default().fg(TEXT_DIM),
-            )]))])
+            )])])
         }
     } else {
-        List::new(visible)
+        Paragraph::new(lines)
     };
 
     // Build title with path + selection count
@@ -556,8 +543,11 @@ fn render_file_browser(frame: &mut Frame, area: Rect, app: &AppState) {
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(if is_focused { BORDER_ACTIVE } else { BORDER }));
 
-    let list = list.block(block);
-    frame.render_widget(list, area);
+    let paragraph = paragraph
+        .block(block)
+        .wrap(Wrap { trim: true })
+        .scroll((start as u16, 0));
+    frame.render_widget(paragraph, area);
 }
 
 // ── Bottom Panel (Progress + Sparkline + Keybinds) ──────────────────────────
@@ -735,7 +725,7 @@ pub fn render_mode_selection(frame: &mut Frame, selected: usize) {
             Span::styled("  [", Style::default().fg(MUTED)),
             Span::styled("FILEDROP", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
             Span::styled("] ", Style::default().fg(MUTED)),
-            Span::styled("v0.5.0 ", Style::default().fg(TEXT_DIM)),
+            Span::styled("v0.5.2 ", Style::default().fg(TEXT_DIM)),
             Span::styled("Connection Setup", Style::default().fg(TEXT_PRIMARY)),
         ]),
         Line::from(""),
@@ -805,7 +795,9 @@ pub fn render_mode_selection(frame: &mut Frame, selected: usize) {
             Style::default().fg(GREEN).bold(),
         ));
 
-    let paragraph = Paragraph::new(lines).block(block);
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, content_area);
 }
 
@@ -904,6 +896,8 @@ pub fn render_hotspot_guide(frame: &mut Frame, os: &str) {
             Style::default().fg(WARNING_AMBER).bold(),
         ));
 
-    let paragraph = Paragraph::new(lines).block(block);
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, content_area);
 }
