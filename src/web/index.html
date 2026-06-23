@@ -725,7 +725,7 @@
     <span class="logo-bracket">[</span>
     <span class="logo-text">FileDrop</span>
     <span class="logo-bracket">]</span>
-    <span class="logo-ver">v0.5.2</span>
+    <span class="logo-ver">v0.5.3</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <button id="installBtn" class="install-btn" onclick="installPWA()">⬇ Install</button>
@@ -796,7 +796,7 @@
 </div>
 
 <div class="footer">
-  FileDrop v0.5.2 // encrypted local transfer // no cloud // no trace
+  FileDrop v0.5.3 // encrypted local transfer // no cloud // no trace
 </div>
 
 <script>
@@ -1016,7 +1016,8 @@ function addFiles(fileList) {
     }
   }
 
-  processBatch();
+  // Defer processing to the next tick to ensure the overlay displays immediately!
+  setTimeout(processBatch, 50);
 }
 
 function clearFiles() {

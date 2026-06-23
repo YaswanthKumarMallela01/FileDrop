@@ -1,7 +1,7 @@
 //! TUI rendering — Hacker-themed Ratatui widget composition.
 //!
 //! ╔═══════════════════════════════════════════════════╗
-//! ║  [FILEDROP] v0.5.2  ::  RECEIVE_MODE  ::  ONLINE   ║
+//! ║  [FILEDROP] v0.5.3  ::  RECEIVE_MODE  ::  ONLINE   ║
 //! ╠═════════════════════╤═════════════════════════════╣
 //! ║  [ TRANSFER QUEUE ] │  [ SYSTEM LOG ]             ║
 //! ║  ─────────────────  │  ───────────────            ║
@@ -88,7 +88,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
             Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
         ),
         Span::styled("] ", Style::default().fg(MUTED)),
-        Span::styled("v0.5.2 ", Style::default().fg(TEXT_DIM)),
+        Span::styled("v0.5.3 ", Style::default().fg(TEXT_DIM)),
         Span::styled(" :: ", Style::default().fg(MUTED)),
         Span::styled(
             mode_text,
@@ -725,7 +725,7 @@ pub fn render_mode_selection(frame: &mut Frame, selected: usize) {
             Span::styled("  [", Style::default().fg(MUTED)),
             Span::styled("FILEDROP", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
             Span::styled("] ", Style::default().fg(MUTED)),
-            Span::styled("v0.5.2 ", Style::default().fg(TEXT_DIM)),
+            Span::styled("v0.5.3 ", Style::default().fg(TEXT_DIM)),
             Span::styled("Connection Setup", Style::default().fg(TEXT_PRIMARY)),
         ]),
         Line::from(""),

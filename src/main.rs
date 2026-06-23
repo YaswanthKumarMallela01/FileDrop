@@ -21,7 +21,7 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(
     name = "filedrop",
-    version = "0.5.2",
+    version = "0.5.3",
     about = "Secure, fast, local Wi-Fi file transfer between laptop and phone",
     long_about = "FileDrop enables secure file transfer between your laptop and paired phone \
                   over local Wi-Fi. No internet, no cloud — just fast, encrypted transfers \
@@ -154,7 +154,7 @@ async fn main() -> anyhow::Result<()> {
             init_tracing();
             println!();
             println!("  ╔══════════════════════════════════════╗");
-            println!("  ║       FileDrop v0.5.2 — Pairing      ║");
+            println!("  ║       FileDrop v0.5.3 — Pairing      ║");
             println!("  ╚══════════════════════════════════════╝");
             println!();
             security::pairing::start_pairing().await?;
@@ -609,7 +609,7 @@ async fn run_demo_mode() -> anyhow::Result<()> {
     let mut app = AppState::new(AppMode::Receive);
 
     // Simulate initial state
-    app.log("FileDrop v0.5.2 — RECEIVE MODE".into(), LogLevel::Info);
+    app.log("FileDrop v0.5.3 — RECEIVE MODE".into(), LogLevel::Info);
     app.log("Server listening on ws://0.0.0.0:7878/ws".into(), LogLevel::Info);
     app.log("mDNS: Advertising 'my-laptop' on _filedrop._tcp.local".into(), LogLevel::Info);
     app.log("Waiting for incoming connections...".into(), LogLevel::Info);

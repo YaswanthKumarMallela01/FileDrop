@@ -54,7 +54,7 @@ pub fn advertise_service(
     // Build properties for TXT record
     let mut properties = HashMap::new();
     properties.insert("fingerprint".to_string(), fingerprint.to_string());
-    properties.insert("version".to_string(), "0.5.2".to_string());
+    properties.insert("version".to_string(), "0.5.3".to_string());
 
     let host_name = format!("{}.local.", device_name.to_lowercase().replace(' ', "-"));
 
