@@ -207,3 +207,15 @@ fn generate_fd_icon(size: u32) -> Vec<u8> {
 
     buf
 }
+
+/// The compiled hash-wasm library
+const HASH_WASM_JS: &str = include_str!("hash-wasm.js");
+
+/// Serve the hash-wasm library
+pub async fn serve_hash_wasm() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/javascript")],
+        HASH_WASM_JS,
+    )
+}

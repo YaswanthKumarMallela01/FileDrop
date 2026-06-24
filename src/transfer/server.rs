@@ -120,7 +120,7 @@ pub async fn start_server(
         .route("/ws", get(ws_handler))
         .route(
             "/health",
-            get(|| async { "FileDrop v0.5.3 OK" }),
+            get(|| async { "FileDrop v0.5.4 OK" }),
         )
         // Serve the embedded web UI for phone browsers
         .route("/", get(crate::web::serve_index))
@@ -130,6 +130,7 @@ pub async fn start_server(
         .route("/sw.js", get(crate::web::serve_sw))
         .route("/icon-192.png", get(crate::web::serve_icon_192))
         .route("/icon-512.png", get(crate::web::serve_icon_512))
+        .route("/hash-wasm.js", get(crate::web::serve_hash_wasm))
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.5.3-00e87b?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.4-00e87b?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/HTML-CSS-JS-blue?style=for-the-badge" alt="HTML CSS JS">
   <img src="https://img.shields.io/badge/GitHub%20Pages-Live-222?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Pages">
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License">

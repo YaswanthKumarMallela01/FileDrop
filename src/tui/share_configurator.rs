@@ -487,7 +487,7 @@ fn render_configurator(
         Span::styled("  [", Style::default().fg(MUTED)),
         Span::styled("FILEDROP", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
         Span::styled("] ", Style::default().fg(MUTED)),
-        Span::styled("v0.5.3 ", Style::default().fg(TEXT_DIM)),
+        Span::styled("v0.5.4 ", Style::default().fg(TEXT_DIM)),
         Span::styled(" :: ", Style::default().fg(MUTED)),
         Span::styled("EPHEMERAL SHARE CONFIGURATOR", Style::default().fg(GREEN_BRIGHT)),
         Span::styled(" :: ", Style::default().fg(MUTED)),
