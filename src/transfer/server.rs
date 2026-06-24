@@ -120,7 +120,7 @@ pub async fn start_server(
         .route("/ws", get(ws_handler))
         .route(
             "/health",
-            get(|| async { "FileDrop v0.5.4 OK" }),
+            get(|| async { "FileDrop v0.5.5 OK" }),
         )
         // Serve the embedded web UI for phone browsers
         .route("/", get(crate::web::serve_index))
@@ -223,6 +223,12 @@ struct ActiveTransfer {
     started_at: Instant,
     /// Last progress report time
     last_report: Instant,
+    /// Last speed update time
+    last_speed_update: Instant,
+    /// Last bytes written count
+    last_bytes_received: u64,
+    /// Current speed (bytes/sec)
+    current_speed: f64,
 }
 
 /// Handle an individual WebSocket connection — the main receive loop
@@ -319,6 +325,9 @@ async fn handle_connection(
                                                     writer,
                                                     started_at: Instant::now(),
                                                     last_report: Instant::now(),
+                                                    last_speed_update: Instant::now(),
+                                                    last_bytes_received: 0,
+                                                    current_speed: 0.0,
                                                 });
                                             }
                                             Err(e) => {
@@ -493,10 +502,20 @@ async fn handle_connection(
                                 Ok(written) => {
                                     // Throttle progress reports to ~10/sec
                                     if transfer.last_report.elapsed().as_millis() > 100 {
-                                        let elapsed =
-                                            transfer.started_at.elapsed().as_secs_f64();
-                                        let speed = if elapsed > 0.0 {
-                                            written as f64 / elapsed
+                                        let now = Instant::now();
+                                        let speed_elapsed = transfer.last_speed_update.elapsed().as_secs_f64();
+                                        if speed_elapsed >= 1.0 {
+                                            let delta_bytes = written.saturating_sub(transfer.last_bytes_received);
+                                            transfer.current_speed = delta_bytes as f64 / speed_elapsed;
+                                            transfer.last_speed_update = now;
+                                            transfer.last_bytes_received = written;
+                                        }
+
+                                        let file_elapsed = transfer.started_at.elapsed().as_secs_f64();
+                                        let speed = if transfer.last_speed_update > transfer.started_at {
+                                            transfer.current_speed
+                                        } else if file_elapsed > 0.0 {
+                                            written as f64 / file_elapsed
                                         } else {
                                             0.0
                                         };
